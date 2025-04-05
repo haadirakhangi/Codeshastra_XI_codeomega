@@ -65,30 +65,36 @@ const Sidebar: React.FC = () => {
                 All Documents
               </li>
             </NavLink>
-            <li className="flex items-center text-gray-700 hover:bg-gray-100 p-2 rounded-md">
-              <span className="mr-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                </svg>
-              </span>
-              PDFs
-            </li>
-            <li className="flex items-center text-gray-700 hover:bg-gray-100 p-2 rounded-md">
-              <span className="mr-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                </svg>
-              </span>
-              Images
-            </li>
-            <li className="flex items-center text-gray-700 hover:bg-gray-100 p-2 rounded-md">
-              <span className="mr-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5 4a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H5zm-1 9v-1h5v2H5a1 1 0 01-1-1zm7 1h4a1 1 0 001-1v-1h-5v2zm0-4h5V8h-5v2zM9 8H4v2h5V8z" clipRule="evenodd" />
-                </svg>
-              </span>
-              Structured Data
-            </li>
+            <NavLink to="/pdfs">
+              <li className="flex items-center text-gray-700 hover:bg-gray-100 p-2 rounded-md">
+                <span className="mr-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                  </svg>
+                </span>
+                PDFs
+              </li>
+            </NavLink>
+            <NavLink to="/images">
+              <li className="flex items-center text-gray-700 hover:bg-gray-100 p-2 rounded-md">
+                <span className="mr-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                  </svg>
+                </span>
+                Images
+              </li>
+            </NavLink>
+            <NavLink to="/structured">
+              <li className="flex items-center text-gray-700 hover:bg-gray-100 p-2 rounded-md">
+                <span className="mr-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5 4a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H5zm-1 9v-1h5v2H5a1 1 0 01-1-1zm7 1h4a1 1 0 001-1v-1h-5v2zm0-4h5V8h-5v2zM9 8H4v2h5V8z" clipRule="evenodd" />
+                  </svg>
+                </span>
+                Structured Data
+              </li>
+            </NavLink>
           </ul>
         </div>
 
