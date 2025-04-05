@@ -39,9 +39,7 @@ CORS(app)
 app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(24)
 password = quote_plus(os.getenv("MONGO_PASS"))
 uri = (
-    "mongodb+srv://hatim:"
-    + password
-    + "@cluster0.f7or37n.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
+    "mongodb+srv://hatim:"+ password + "@cluster0.f7or37n.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
 )
 client = MongoClient(uri, server_api=ServerApi("1"))
 mongodb = client["CodeShastra"]
