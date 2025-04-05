@@ -13,7 +13,6 @@ from core.ingest import DataLoader
 from core.utils import Utilities
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
 import faiss
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from flask import (
@@ -58,16 +57,37 @@ EMBEDDINGS = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
 
 
 # ROUTER
-structured_llm_router = LLM.with_structured_output(RouteQuery)
-router_system_prompt = """You are an expert at routing a user's question. Understand the user query and decide where to route the user question. 
-Choose one of:
-'vectorstore' : when external data is required to answer the question or user asks in general question.
-'generate_report': Question which involves generating report.
-'write_email': If writing an email is required."""
+structured_llm_router = LLM.with_structured_output(AnalyzeQuery)
+router_system_prompt = """You are an expert in analyzing user queries to determine the correct routing destination and whether access should be granted to documents from different departments.
+
+DEPARTMENTS:
+- hr
+- sales
+- legal
+
+ROUTES:
+- 'vectorstore': Use when the user asks general questions or external data is required.
+- 'generate_report': Use when the user asks to generate or request a report.
+- 'write_email': Use when the user asks for help composing or sending an email.
+
+ACCESS CONTROL RULES:
+- The user should typically be given access to the documents from their own department.
+- Only provide access if:
+    1. The task clearly requires a higher access level.
+    2. The policy instructions explicitly permit it.
+
+INSTRUCTIONS:
+{instructions}
+
+
+OUTPUT:
+- route: One of ['vectorstore', 'generate_report', 'write_email']
+- access_level: Final access level to be used (same as original unless changed per policy)
+"""
 route_prompt = ChatPromptTemplate.from_messages(
     [
         ("system", router_system_prompt),
-        ("human", "{question}"),
+        ("human", "INPUT:\n- user's current department: {department}\n- user's question: {question}"),
     ]
 )
 
@@ -163,7 +183,7 @@ def retrieve(state):
     print("---RETRIEVE---")
     question = state["question"]
     dept = state["department"]
-    access = state["access"]
+    new_dept = state["new_dept"]
     user_id = session["user_id"]
     faiss_index_path = os.path.join(UPLOAD_FOLDER, str(user_id), "text",'faiss_index', 'index.faiss')
     # print(f"FAISS index path: {faiss_index_path}")
@@ -173,9 +193,9 @@ def retrieve(state):
     compression_retriever = ContextualCompressionRetriever(
         base_compressor=compressor, base_retriever=vectorstore.as_retriever()
     )
-
+    query = {"$or": [{"dept": page} for page in new_dept]}
     # Retrieval
-    documents = compression_retriever.invoke(question,metadata_filter={"access":access, "dept":dept})
+    documents = compression_retriever.invoke(question, metadata_filter={"access":query})
     print(documents[:2])
     # print(documents[0])
     return {"documents": documents, "question": question}
@@ -226,7 +246,7 @@ def grade_documents(state):
         else:
             print("---GRADE: DOCUMENT NOT RELEVANT---")
             continue
-    return {"documents": filtered_docs, "question": question}
+    return {"filtered_documents": filtered_docs, "question": question}
 
 
 def transform_query(state):
@@ -261,10 +281,11 @@ def classify_user_query(state):
 
     print("---CLASSIFYING INPUT---")
     question = state["question"]
-    
-    response = question_router.invoke({"question":question})
+    department = state["department"]
+    instructions = state["instructions"]    
+    response = question_router.invoke({"question":question, "department": department, "instructions": instructions})
 
-    return {"question_type": response.route}
+    return {"question_type": response.route, "new_dept":response.dept_access}
 
 def decide_to_generate(state):
     """
@@ -279,13 +300,12 @@ def decide_to_generate(state):
 
     print("---ASSESS GRADED DOCUMENTS---")
     state["question"]
-    filtered_documents = state["documents"]
+    new_dept = state["new_dept"]
+    filtered_documents = state["filtered_documents"]
 
     if not filtered_documents:
-        print(
-            "---DECISION: ALL DOCUMENTS ARE NOT RELEVANT TO QUESTION, TRANSFORM QUERY---"
-        )
-        return "transform_query"
+        print("---DECISION: RAISE ERROR---")
+        return "raise_error"
     else:
         # We have relevant documents, so generate answer
         print("---DECISION: GENERATE---")
@@ -327,6 +347,21 @@ def grade_generation_v_documents_and_question(state):
         print("---DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS, RE-TRY---")
         return "not supported"
 
+def raise_error(state):
+    """
+    Raise an error if the user is trying to access a document they are not authorized for.
+
+    Args:
+        state (dict): The current graph state
+
+    Returns:
+        str: Error message
+    """
+    documents = state["documents"]
+    document_department = documents[0].metadata["dept"]
+    print(f"Document department: {documents[:5]}")
+    return {"error": f"User is not authorized to access documents. Please contact your manager for access."}
+
 class GraphState(TypedDict):
     """
     Represents the state of our graph.
@@ -338,6 +373,10 @@ class GraphState(TypedDict):
         question_type: type of question
         department: department of user
         access: access level of user
+        new_dept: new department to access
+        instructions: instructions or policy
+        error: error message
+        filtered_documents: filtered documents based on relevance
     """
 
     question: str
@@ -345,7 +384,11 @@ class GraphState(TypedDict):
     documents: List[str]
     question_type : str
     department: str
-    access: str
+    access: List[str]
+    new_dept : List[str]
+    instructions: str
+    error: str
+    filtered_documents: List[Document]
 
 
 workflow = StateGraph(GraphState)
@@ -355,22 +398,22 @@ workflow.add_node("classify_user_query", classify_user_query)
 workflow.add_node("retrieve", retrieve)  # retrieve
 workflow.add_node("grade_documents", grade_documents)  # grade documents
 workflow.add_node("generate", generate)  # generatae
-workflow.add_node("transform_query", transform_query)  # transform_query
+workflow.add_node("raise_error", raise_error) 
 
 # Build graph
 workflow.add_edge(START, "classify_user_query")
 workflow.add_edge("classify_user_query", "retrieve")
 workflow.add_edge("retrieve", "grade_documents")
-workflow.add_edge("transform_query", "retrieve")
 workflow.add_conditional_edges(
     "grade_documents",
     decide_to_generate,
     {
-        "transform_query": "transform_query",
+        "raise_error": "raise_error",
         "generate": "generate",
     },
 )
 workflow.add_edge("generate",END)
+workflow.add_edge("raise_error", END)
 
 # Compile
 RAG = workflow.compile()
@@ -449,43 +492,63 @@ def agent_chat():
     user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
     if not user_data:
         return "User not found", 404
-    inputs = {"question": user_message,"department": user_data["department"], "access": user_data["role"]}
+    instructions = """- Legal documents should only be accessed or referenced by managers or admins. Interns are strictly prohibited.
+- Sales documents may be accessed by interns, managers, and admins.
+- HR-related documents can be accessed by managers and admins. Interns may request access but should not be elevated unless explicitly approved.
+- Technical documentation is open to all roles.
+- If the user requests access to a document they are not authorized for, do not elevate their access unless business-critical justification is clearly present in the query.
+"""
+    inputs = {"question": user_message,"department": user_data["department"], "access": user_data["role"], "instructions": instructions}
     config = {"configurable": {"user_id": user_id, "thread_id": "2"}}
     def generate():
         for s in RAG.stream(
-            inputs, config=config, stream_mode="messages"
+            inputs, config=config, stream_mode=["values", "messages"]
         ):
-            print(f"\n\nStreamed response: \n{s}\n\n")
+            # print(f"\n\nStreamed response: \n{s}\n\n")
             function_name = None
             arguments = None
             function_call = False
             tool_call = False
             tool_name = None
-            print(f"Streamed response: {s}")
-            if hasattr(s[0], "additional_kwargs") and s[0].additional_kwargs.get(
-                "function_call"
-            ):
-                print(f"Function call: {s[0].additional_kwargs['function_call']}")
-                function_call = True
-                function_name = s[0].additional_kwargs["function_call"]["name"]
-                arguments = json.loads(
-                    s[0].additional_kwargs["function_call"]["arguments"]
-                )
-            elif hasattr(s[0], "tool_call_id"):
-                print(f"Tool call: {s[0].name}")
-                tool_name = s[0].name
-                tool_call = True
+            if s[0]=="messages":
+                s = s[1]
+                if hasattr(s[0], "additional_kwargs") and s[0].additional_kwargs.get(
+                    "function_call"
+                ):
+                    print(f"Function call: {s[0].additional_kwargs['function_call']}")
+                    function_call = True
+                    function_name = s[0].additional_kwargs["function_call"]["name"]
+                    arguments = json.loads(
+                        s[0].additional_kwargs["function_call"]["arguments"]
+                    )
+                elif hasattr(s[0], "tool_call_id"):
+                    print(f"Tool call: {s[0].name}")
+                    tool_name = s[0].name
+                    tool_call = True
 
-            data = {
-                "content": s[0].content,
-                "function_call": function_call,
-                "function_name": function_name,
-                "arguments": arguments,
-                "tool_call": tool_call,
-                "tool_name": tool_name,
-            }
-
-            yield f"data: {json.dumps(data)}\n\n".encode("utf-8")
+                data = {
+                    "payload_type": "message",
+                    "content": s[0].content,
+                    "function_call": function_call,
+                    "function_name": function_name,
+                    "arguments": arguments,
+                    "tool_call": tool_call,
+                    "tool_name": tool_name,
+                }
+                yield f"data: {json.dumps(data)}\n\n".encode("utf-8")
+            elif s[0] == "values":
+                values_data = s[1]
+                if "error" in values_data:
+                    error_message = values_data["error"]
+                    data = {
+                        "payload_type": "values",
+                        "error": error_message,
+                    }
+                else:
+                    data = {
+                        "payload_type": "values",
+                    }
+                yield f"data: {json.dumps(data)}\n\n".encode("utf-8")
     return Response(
         stream_with_context(generate()),
         mimetype="text/event-stream",
