@@ -13,6 +13,6 @@ from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 
 model = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")
 compressor = CrossEncoderReranker(model=model, top_n=3)
-compression_retriever = ContextualCompressionRetriever(
-    base_compressor=compressor, base_retriever=retriever
-)
+# compression_retriever = ContextualCompressionRetriever(
+#     base_compressor=compressor, base_retriever=retriever
+# )
