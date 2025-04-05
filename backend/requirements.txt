@@ -13,3 +13,4 @@ tavily-python
 sentence_transformers
 faiss-cpu
 pypdf
+docx2txt

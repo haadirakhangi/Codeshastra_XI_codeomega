@@ -202,6 +202,7 @@ def generate(state):
     question = state["question"]
     documents = state["documents"]
     prompt_type = state["question_type"]
+
     generate_report_prompt = """
 You are a senior data analyst. Your job is to generate a clear, well-structured analytical report based on the information provided.
 
@@ -255,7 +256,7 @@ The report should be written in **Markdown format** and cover all relevant aspec
 
     # RAG generation
     generation = rag_chain.invoke({"context": documents, "question": question})
-    return {"documents": documents, "question": question, "generation": generation}
+    return {"documents": documents, "question": question, "generation": generation, "action": prompt_type}
 
 def grade_documents(state):
     """
@@ -285,7 +286,7 @@ def grade_documents(state):
         else:
             print("---GRADE: DOCUMENT NOT RELEVANT---")
             continue
-    return {"filtered_documents": filtered_docs, "question": question}
+    return {"filtered_documents": filtered_docs, "question": question, "action": state["question_type"]}
 
 
 def transform_query(state):
@@ -398,7 +399,6 @@ def raise_error(state):
     """
     documents = state["documents"]
     document_department = documents[0].metadata["dept"]
-    print(f"Document department: {documents[:5]}")
     return {"error": f"User is not authorized to access documents. Please contact your manager for access."}
 
 class GraphState(TypedDict):
@@ -416,6 +416,7 @@ class GraphState(TypedDict):
         instructions: instructions or policy
         error: error message
         filtered_documents: filtered documents based on relevance
+        action: action to take (e.g., generating_report, raise error)
     """
 
     question: str
@@ -428,6 +429,7 @@ class GraphState(TypedDict):
     instructions: str
     error: str
     filtered_documents: List[Document]
+    action: str
 
 
 workflow = StateGraph(GraphState)
@@ -577,16 +579,16 @@ def agent_chat():
                 yield f"data: {json.dumps(data)}\n\n".encode("utf-8")
             elif s[0] == "values":
                 values_data = s[1]
-                if "error" in values_data:
-                    error_message = values_data["error"]
-                    data = {
-                        "payload_type": "values",
-                        "error": error_message,
-                    }
-                else:
-                    data = {
-                        "payload_type": "values",
-                    }
+                print("VALUES DATA", values_data)
+                data = {}
+                data["payload_type"] = "values"
+                if "error" or "action" in values_data:
+                    if "action" in values_data:
+                        action = values_data["action"]
+                        data["action"] = action
+                    elif "error" in values_data:
+                        error_message = values_data["error"]
+                        data["error"] = error_message
                 yield f"data: {json.dumps(data)}\n\n".encode("utf-8")
     return Response(
         stream_with_context(generate()),
