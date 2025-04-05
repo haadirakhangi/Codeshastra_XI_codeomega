@@ -23,4 +23,5 @@ class DataLoader:
         random_indexes = random.sample(range(len(doc_splits)), num_indexes)
         random_docs= [doc_splits[i] for i in random_indexes]
         context = "\n\n".join(doc.page_content for doc in random_docs)
+        print("Context created from random documents",context)
         return context, docs

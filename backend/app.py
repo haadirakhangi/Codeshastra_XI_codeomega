@@ -166,7 +166,7 @@ def retrieve(state):
     access = state["access"]
     user_id = session["user_id"]
     faiss_index_path = os.path.join(UPLOAD_FOLDER, str(user_id), "text",'faiss_index', 'index.faiss')
-    print(f"FAISS index path: {faiss_index_path}")
+    # print(f"FAISS index path: {faiss_index_path}")
     vectorstore = FAISS.load_local(faiss_index_path, embeddings=EMBEDDINGS, allow_dangerous_deserialization=True)
     RERANKER_MODEL = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")
     compressor = CrossEncoderReranker(model=RERANKER_MODEL, top_n=5)
@@ -175,7 +175,9 @@ def retrieve(state):
     )
 
     # Retrieval
-    documents = compression_retriever.invoke(question, config={'metadata': {"access":access, "dept":dept}})
+    documents = compression_retriever.invoke(question,metadata_filter={"access":access, "dept":dept})
+    print(documents[:2])
+    # print(documents[0])
     return {"documents": documents, "question": question}
 
 def generate(state):
@@ -257,12 +259,12 @@ def classify_user_query(state):
         state (dict): Updates documents key with appended web results
     """
 
-    print("---ANSWER DIRECTLY---")
+    print("---CLASSIFYING INPUT---")
     question = state["question"]
     
     response = question_router.invoke({"question":question})
 
-    return {"question_type": response.route, "question": question}
+    return {"question_type": response.route}
 
 def decide_to_generate(state):
     """
@@ -434,7 +436,7 @@ def login():
     
 @app.route("/agent-chat", methods=["POST"])
 def agent_chat():
-    user_id = session.get('user_id')  # You can still use this for folder structuring
+    user_id = session.get('user_id')  
     if not user_id:
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
     user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
@@ -447,11 +449,47 @@ def agent_chat():
     user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
     if not user_data:
         return "User not found", 404
-    inputs = {"question": [{"role": "user", "content": user_message}],"department": user_data["department"], "access": user_data["role"]}
+    inputs = {"question": user_message,"department": user_data["department"], "access": user_data["role"]}
     config = {"configurable": {"user_id": user_id, "thread_id": "2"}}
-    response = RAG.invoke(inputs, config=config)
-    print(f"Response: {response}")
-    return jsonify({"response": str(response)}), 200
+    def generate():
+        for s in RAG.stream(
+            inputs, config=config, stream_mode="messages"
+        ):
+            print(f"\n\nStreamed response: \n{s}\n\n")
+            function_name = None
+            arguments = None
+            function_call = False
+            tool_call = False
+            tool_name = None
+            print(f"Streamed response: {s}")
+            if hasattr(s[0], "additional_kwargs") and s[0].additional_kwargs.get(
+                "function_call"
+            ):
+                print(f"Function call: {s[0].additional_kwargs['function_call']}")
+                function_call = True
+                function_name = s[0].additional_kwargs["function_call"]["name"]
+                arguments = json.loads(
+                    s[0].additional_kwargs["function_call"]["arguments"]
+                )
+            elif hasattr(s[0], "tool_call_id"):
+                print(f"Tool call: {s[0].name}")
+                tool_name = s[0].name
+                tool_call = True
+
+            data = {
+                "content": s[0].content,
+                "function_call": function_call,
+                "function_name": function_name,
+                "arguments": arguments,
+                "tool_call": tool_call,
+                "tool_name": tool_name,
+            }
+
+            yield f"data: {json.dumps(data)}\n\n".encode("utf-8")
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+    )
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -473,6 +511,8 @@ def upload_docs():
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
     user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
     department= user_data["department"]
+    # department = "Legal"
+
     if not user_id:
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
 
@@ -528,13 +568,13 @@ def upload_docs():
 
         response = policy_agent.invoke({"context":context})
         metadata = response.access
-        print("metadata", metadata)
+        # print("metadata", metadata)
         for doc in docs:
             all_docs_with_metadata.append(Document(page_content=doc.page_content, metadata={"access": metadata, "dept":department}))
     faiss_folder = os.path.join(UPLOAD_FOLDER, str(user_id), "text",'faiss_index')
     os.makedirs(faiss_folder, exist_ok=True)
     faiss_index_path = os.path.join(faiss_folder, 'index.faiss')
-    print(all_docs_with_metadata[:2])
+    print("ORIGINAL DOCUMENTS UPLOADED\n\n",all_docs_with_metadata[:2])
 
     if os.path.exists(faiss_index_path):
         index = (faiss_index_path)
