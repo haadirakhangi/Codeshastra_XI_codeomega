@@ -4,18 +4,22 @@ from typing import Literal, List
 class Policy(BaseModel):
     """Based on the policy, determine which types of users have access to this"""
 
-    access: Literal["admin", "manager", "intern"] = Field(
+    access: List[Literal["admin", "manager", "intern"]] = Field(
         ...,
-        description="One of the user types who are allowed to access the document",
+        description="List of the user types who are allowed to access the document",
     )
 
 
-class RouteQuery(BaseModel):
-    """Route a user query to the most suitable function"""
+class AnalyzeQuery(BaseModel):
+    """Analyze the user query to route it to the most suitable function and what access level is required."""
 
     route: Literal["vectorstore", "generate_report", "write_email"] = Field(
         ...,
         description="Given a user question decide the most suitable function to route the user question to. Choose one of:\n'vectorstore' : when external data is required to answer the question.\n'generate_report': Question which involves generating report.\n'write_email': If writing an email is required.",
+    )
+    dept_access: List[Literal["hr", "sales", "legal"]] = Field(
+        ...,
+        description="List of the department types who are allowed to access the document",
     )
 
 class GradeDocuments(BaseModel):
