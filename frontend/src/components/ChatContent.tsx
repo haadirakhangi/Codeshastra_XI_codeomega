@@ -1,233 +1,192 @@
-import React, { useState } from 'react';
-import DataSourceModal from './DataSourceModal';
-import GDrivePicker from './GdrivePicker';
+import axios from 'axios';
+import { useState, useRef } from 'react';
+import { FaPaperclip, FaMicrophone, FaUserCircle, FaRobot, FaDropbox, FaRegFileAlt } from 'react-icons/fa';
+import { SiNotion } from 'react-icons/si';
+import { FcGoogle } from 'react-icons/fc';
+
 
 const ChatContent: React.FC = () => {
   const [query, setQuery] = useState('');
-  const [submitted, setSubmitted] = useState(false);
   const [response, setResponse] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{ name: string; progress: number }[]>([]);
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [messages, setMessages] = useState<{ sender: string; text: string }[]>([]);
   const [uploadNotification, setUploadNotification] = useState<string | null>(null);
-  const [showDataSourceModal, setShowDataSourceModal] = useState(false);
-  const [gdriveFiles, setGdriveFiles] = useState<{ id: string; name: string }[]>([]);
+  const [listening, setListening] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [showGDrivePicker, setShowGDrivePicker] = useState(false);
+
+
+  const handleExternalSource = (source: string) => {
+    setShowUploadMenu(false);
+    if (source === 'Google Drive') {
+      setShowGDrivePicker(true);
+    } else {
+      alert(`Connect to ${source} (coming soon)`);
+    }
+  };
+  
+
+  const handleSend = async () => {
+    if (!query.trim()) return;
+
+    setMessages(prev => [...prev, { sender: 'user', text: query }]);
+    setQuery('');
+    setResponse(null);
+
+    try {
+      const res = await axios.post('http://localhost:5000/chat', { query });
+      const reply = res.data?.response || 'No response from backend.';
+      setMessages(prev => [...prev, { sender: 'bot', text: reply }]);
+    } catch (error) {
+      setMessages(prev => [...prev, { sender: 'bot', text: 'No response from backend.' }]);
+    }
+  };
+
+  const handleVoiceInput = () => {
+    const recognition = new (window.SpeechRecognition || (window as any).webkitSpeechRecognition)();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    setListening(true);
+
+    recognition.start();
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setQuery(transcript);
+      setListening(false);
+    };
+
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
-    const fileArray = Array.from(files);
+    const formData = new FormData();
+    Array.from(files).forEach((file) => formData.append('files', file));
 
-    const progressData = fileArray.map((file) => ({
-      name: file.name,
-      progress: 0,
-    }));
-
-    setUploadProgress(progressData);
-    setUploading(true);
-
-    fileArray.forEach((file, index) => {
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 10;
-        setUploadProgress((prev) =>
-          prev.map((item, i) =>
-            i === index ? { ...item, progress: Math.min(progress, 100) } : item
-          )
-        );
-
-        if (progress >= 100) {
-          clearInterval(interval);
-
-          if (index === fileArray.length - 1) {
-            setTimeout(() => {
-              setUploading(false);
-              setUploadedFiles((prev) => [...prev, ...fileArray]);
-              setUploadProgress([]);
-              setUploadNotification(`${fileArray.length} file(s) uploaded successfully.`);
-              setTimeout(() => setUploadNotification(null), 3000);
-            }, 500);
-          }
-        }
-      }, 200);
-    });
-  };
-
-  const handleSend = () => {
-    if (!query.trim()) return;
-    setSubmitted(true);
-    setResponse(null);
-
-    setTimeout(() => {
-      setResponse(`You asked: "${query}" — Here's a mock response from the backend.`);
-    }, 1000);
-  };
-
-  const handleSuggestedClick = (text: string) => {
-    setQuery(text);
-    setSubmitted(true);
-    setResponse(null);
-
-    setTimeout(() => {
-      setResponse(`You selected: "${text}" — Here's a mock response from the backend.`);
-    }, 1000);
-  };
-
-  const handleAuthClick = async (provider: 'gdrive' | 'dropbox' | 'notion') => {
-    if (provider === 'gdrive') {
-      // Close modal and open Google Drive picker
-      setShowDataSourceModal(false);
-      setShowGDrivePicker(true);
-    }
-    // Future implementations for Dropbox and Notion go here
+    axios.post('http://localhost:5000/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+      .then(() => {
+        setUploadNotification(`${files.length} file(s) uploaded successfully.`);
+        setTimeout(() => setUploadNotification(null), 3000);
+      })
+      .catch(() => {
+        setUploadNotification('Upload failed.');
+        setTimeout(() => setUploadNotification(null), 3000);
+      });
   };
 
   return (
-    <main className="flex-1 flex flex-col relative">
+    <main className="flex-1 flex flex-col h-screen relative bg-gray-50">
       {uploadNotification && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-100 text-green-800 px-4 py-2 rounded-md shadow-md z-10">
           {uploadNotification}
         </div>
       )}
 
-      {showDataSourceModal && (
-        <DataSourceModal onAuthClick={handleAuthClick} onClose={() => setShowDataSourceModal(false)} />
-      )}
-
-      {showGDrivePicker && (
-        <div className="p-4">
-          <GDrivePicker
-            onFilesSelected={(files) => {
-              setGdriveFiles(files);
-              setUploadNotification(`${files.length} file(s) imported from Google Drive.`);
-              setShowGDrivePicker(false);
-              setTimeout(() => setUploadNotification(null), 3000);
-            }}
-          />
-        </div>
-      )}
-
-      {!submitted ? (
-        <div className="flex-1 p-6 overflow-auto">
-          <div className="border border-gray-200 rounded-lg p-6 mb-8">
-            {!uploading ? (
-              <>
-                <h2 className="text-xl font-semibold mb-2">Welcome to Enterprise RAG Assistant</h2>
-                <p className="text-gray-600 mb-6">
-                  Ask questions about your organization's documents...
-                </p>
-                <div className="flex flex-wrap gap-4">
-                  <label className="flex items-center px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 cursor-pointer">
-                    Upload Documents
-                    <input
-                      id="multiple_files"
-                      type="file"
-                      multiple
-                      className="hidden"
-                      onChange={handleFileUpload}
-                    />
-                  </label>
-                  <button
-                    onClick={() => setShowDataSourceModal(true)}
-                    className="flex items-center px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                  >
-                    Connect Data Source
-                  </button>
-                </div>
-
-                {uploadedFiles.length > 0 && (
-                  <div className="mt-6">
-                    <h4 className="text-gray-700 font-medium mb-2">Uploaded Files:</h4>
-                    <ul className="list-disc ml-5 text-sm text-gray-800">
-                      {uploadedFiles.map((file, idx) => (
-                        <li key={idx}>{file.name}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {gdriveFiles.length > 0 && (
-                  <div className="mt-6">
-                    <h4 className="text-gray-700 font-medium mb-2">Google Drive Files:</h4>
-                    <ul className="list-disc ml-5 text-sm text-gray-800">
-                      {gdriveFiles.map((file) => (
-                        <li key={file.id}>{file.name}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <h2 className="text-lg font-medium mb-4">Uploading Files...</h2>
-                <ul className="space-y-3">
-                  {uploadProgress.map((file, idx) => (
-                    <li key={idx} className="text-sm">
-                      <div className="font-medium text-gray-800 mb-1">{file.name}</div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-blue-500 h-2 rounded-full transition-all duration-200"
-                          style={{ width: `${file.progress}%` }}
-                        ></div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-
-          <div className="mb-8">
-            <h3 className="text-gray-700 font-medium mb-4">Try asking about:</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                "What are our data retention policies?",
-                "Generate a summary of our 2023 compliance guidelines",
-                "Extract key points from the latest product roadmap",
-                "Find information about our customer onboarding process"
-              ].map((item) => (
-                <div
-                  key={item}
-                  className="p-4 bg-gray-50 rounded-md hover:bg-gray-100 cursor-pointer"
-                  onClick={() => handleSuggestedClick(item)}
-                >
-                  {item}
-                </div>
-              ))}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {messages.map((msg, idx) => (
+          <div
+            key={idx}
+            className={`flex items-start max-w-xl gap-2 ${msg.sender === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'
+              }`}
+          >
+            <div className="text-2xl text-gray-600">
+              {msg.sender === 'user' ? <FaUserCircle /> : <FaRobot />}
+            </div>
+            <div
+              className={`px-4 py-2 rounded-lg shadow text-sm ${msg.sender === 'user' ? 'bg-blue-100 text-right' : 'bg-gray-200'
+                }`}
+            >
+              {msg.text}
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="flex-1 p-6 overflow-auto">
-          <div className="mb-4 text-lg text-gray-700 font-medium">Chat Response</div>
-          {response ? (
-            <div className="p-4 bg-gray-100 rounded-md text-gray-800">{response}</div>
-          ) : (
-            <div className="text-gray-500">Loading response...</div>
-          )}
-        </div>
-      )}
+        ))}
+      </div>
 
-      <div className="border-t border-gray-200 pt-4 px-6">
-        <div className="flex items-center bg-white border border-gray-200 rounded-lg p-2">
-          <button className="p-2 text-gray-500 hover:text-gray-700"></button>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask a question or give instructions..."
-            className="flex-1 p-2 focus:outline-none"
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          />
+      {/* Chat Input Area */}
+      <div className="border-t border-gray-300 bg-white px-4 py-3 flex items-center sticky bottom-0">
+        <div className="relative">
           <button
-            className="ml-2 px-4 py-1 bg-gray-500 text-white rounded-md hover:bg-gray-600"
-            onClick={handleSend}
+            onClick={() => setShowUploadMenu(prev => !prev)}
+            className="mr-2 text-gray-600 hover:text-black text-xl"
           >
-            Send
+            <FaPaperclip />
           </button>
+
+          {showUploadMenu && (
+            <div className="absolute bottom-12 left-0 bg-white border border-gray-300 shadow-lg rounded-md z-20 w-52 text-sm">
+              <button
+                onClick={() => {
+                  fileInputRef.current?.click();
+                  setShowUploadMenu(false);
+                }}
+                className="w-full flex items-center gap-2 px-4 py-2 hover:bg-gray-100"
+              >
+                <FaRegFileAlt /> Upload Document
+              </button>
+              <div className="border-t border-gray-200 px-4 py-2 text-xs text-gray-500">
+                Use Other Sources
+              </div>
+              <button
+                onClick={() => handleExternalSource('Google Drive')}
+                className="w-full flex items-center gap-2 px-4 py-2 hover:bg-gray-100"
+              >
+                <FcGoogle className="text-blue-600" /> Google Drive
+              </button>
+              <button
+                onClick={() => handleExternalSource('Dropbox')}
+                className="w-full flex items-center gap-2 px-4 py-2 hover:bg-gray-100"
+              >
+                <FaDropbox className="text-indigo-600" /> Dropbox
+              </button>
+              <button
+                onClick={() => handleExternalSource('Notion')}
+                className="w-full flex items-center gap-2 px-4 py-2 hover:bg-gray-100"
+              >
+                <SiNotion className="text-black" /> Notion
+              </button>
+            </div>
+          )}
+
+          <input
+            type="file"
+            multiple
+            hidden
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+          />
         </div>
+
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Ask a question or give instructions..."
+          className="flex-1 border border-gray-300 rounded px-3 py-2 mr-2 focus:outline-none"
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+        />
+
+        <button
+          onClick={handleVoiceInput}
+          className={`mr-2 px-3 py-2 rounded text-xl ${listening ? 'bg-red-100' : 'bg-gray-200'
+            } hover:bg-gray-300`}
+        >
+          <FaMicrophone />
+        </button>
+
+        <button
+          onClick={handleSend}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          Send
+        </button>
       </div>
     </main>
   );

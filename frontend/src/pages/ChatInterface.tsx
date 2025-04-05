@@ -1,11 +1,11 @@
 import Sidebar from "../components/Sidebar";
-import MainContent from "../components/MainContent";
+import ChatContent from "../components/ChatContent";
 
 function ChatInterface() {
   return (
     <div className="flex h-screen bg-white">
       <Sidebar />
-      <MainContent />
+      <ChatContent />
     </div>
   );
 }

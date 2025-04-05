@@ -6,6 +6,8 @@ import ChatInterface from './pages/Chatinterface'
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENTID;
+import Login from "./pages/Login"
+import Register from './pages/Register';
 
 function App() {
   return (
@@ -15,6 +17,9 @@ function App() {
           <Route path="/" element={<Home />} />
           {/* Example additional route */}
           <Route path="/chat" element={<ChatInterface />} />
+          <Route path="/Login" element={<Login />} />
+          <Route path="/Register" element={<Register />} />
+
         </Routes>
       </BrowserRouter>
     </GoogleOAuthProvider>
