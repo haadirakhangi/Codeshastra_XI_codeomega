@@ -1,0 +1,15 @@
+Flask
+flask_bcrypt
+flask-cors
+requests
+python-dotenv
+pymongo
+langgraph 
+langchain_community 
+langchain_experimental 
+langmem 
+langchain-google-genai 
+tavily-python
+sentence_transformers
+faiss-cpu
+pypdf
