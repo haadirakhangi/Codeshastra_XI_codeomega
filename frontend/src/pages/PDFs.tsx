@@ -1,10 +1,10 @@
 import React from 'react';
 
-const AllDocument: React.FC = () => {
+const PDFDocument: React.FC = () => {
   return (
     <div className="max-w-screen-xl mx-auto p-6">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">All Document</h1>
+        <h1 className="text-3xl font-bold">All PDFs</h1>
         <div className="flex items-center space-x-4">
           <div className="relative">
             <input
@@ -89,4 +89,4 @@ const AllDocument: React.FC = () => {
   );
 };
 
-export default AllDocument;
+export default PDFDocument;

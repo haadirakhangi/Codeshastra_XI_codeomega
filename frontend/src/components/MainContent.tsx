@@ -65,16 +65,6 @@ const MainContent: React.FC = () => {
     }, 1000);
   };
 
-  const handleSuggestedClick = (text: string) => {
-    setQuery(text);
-    setSubmitted(true);
-    setResponse(null);
-
-    setTimeout(() => {
-      setResponse(`You selected: "${text}" — Here's a mock response from the backend.`);
-    }, 1000);
-  };
-
   const handleAuthClick = async (provider: 'gdrive' | 'dropbox' | 'notion') => {
     if (provider === 'gdrive') {
       // Close modal and open Google Drive picker
@@ -151,7 +141,7 @@ const MainContent: React.FC = () => {
                     <input
                       id="multiple_files"
                       type="file"
-                      multiple
+                      multiplez
                       className="hidden"
                       onChange={handleFileUpload}
                     />
@@ -206,25 +196,7 @@ const MainContent: React.FC = () => {
             )}
           </div>
 
-          <div className="mb-8">
-            <h3 className="text-gray-700 font-medium mb-4">Try asking about:</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                "What are our data retention policies?",
-                "Generate a summary of our 2023 compliance guidelines",
-                "Extract key points from the latest product roadmap",
-                "Find information about our customer onboarding process"
-              ].map((item) => (
-                <div
-                  key={item}
-                  className="p-4 bg-gray-50 rounded-md hover:bg-gray-100 cursor-pointer"
-                  onClick={() => handleSuggestedClick(item)}
-                >
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
+          
         </div>
       ) : (
         <div className="flex-1 p-6 overflow-auto">
