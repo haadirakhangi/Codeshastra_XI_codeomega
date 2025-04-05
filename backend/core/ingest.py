@@ -1,12 +1,8 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import WebBaseLoader
-from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 import faiss
-from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain_community.vectorstores import FAISS
+import random
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -15,25 +11,16 @@ os.environ["TAVILY_API_KEY"] = os.getenv("TAVILY_API_KEY")
 
 class DataLoader:
     @staticmethod
-    def load_pdf(pdf_path : str, emdeddings : GoogleGenerativeAIEmbeddings):
+    def load_pdf(pdf_path : str):
         """Load PDF files and create a retriever"""
-        docs = [PyPDFLoader(pdf).load() for pdf in pdf_path]
-        docs_list = [item for sublist in docs for item in sublist]
+        docs = PyPDFLoader(pdf_path).load()
 
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=500, chunk_overlap=100, length_function=len
         )
-        doc_splits = text_splitter.split_documents(docs_list)
-
-        index = faiss.IndexFlatL2(len(emdeddings.embed_query("hello world")))
-
-        vector_store = FAISS(
-            embedding_function=emdeddings,
-            index=index,
-            docstore=InMemoryDocstore(),
-            index_to_docstore_id={},
-        )
-
-        vector_store.add_documents(doc_splits)
-        retriever = vector_store.as_retriever()
-        return retriever
+        doc_splits = text_splitter.split_documents(docs)
+        num_indexes = 10
+        random_indexes = random.sample(range(len(doc_splits)), num_indexes)
+        random_docs= [doc_splits[i] for i in random_indexes]
+        context = "\n\n".join(doc.page_content for doc in random_docs)
+        return context, docs
