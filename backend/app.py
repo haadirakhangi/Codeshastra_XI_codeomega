@@ -161,6 +161,8 @@ def retrieve(state):
     """
     print("---RETRIEVE---")
     question = state["question"]
+    dept = state["department"]
+    access = state["access"]
     RETRIEVER = DataLoader.load_pdf(
         pdf_path=["data/sample.pdf"], emdeddings=GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
     )
@@ -171,7 +173,7 @@ def retrieve(state):
 )
 
     # Retrieval
-    documents = compression_retriever.invoke(question)
+    documents = compression_retriever.invoke(question, search_kwargs={'filter': {"access":access, "dept":dept}, 'k': 5})
     return {"documents": documents, "question": question}
 
 def generate(state):
@@ -330,12 +332,16 @@ class GraphState(TypedDict):
         generation: LLM generation
         documents: list of documents
         question_type: type of question
+        department: department of user
+        access: access level of user
     """
 
     question: str
     generation: str
     documents: List[str]
     question_type : str
+    department: str
+    access: str
 
 
 workflow = StateGraph(GraphState)
@@ -375,48 +381,61 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 @app.route("/register", methods=["POST"])
 def register():
     data = request.get_json()
-    username = data.get("username")
-    email = data.get("email")
-    password = data.get("password")
 
-    if not username or not email or not password:
-        return jsonify({"error": "Username, email, and password are required"}), 400
-    if user_collection.find_one({"username": username}):
-        return jsonify({"error": "Username already exists"}), 400
+    required_fields = ["email", "password", "confirm_password", "role", "Dept", "location", "region"]
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({"error": f"{field} is required"}), 400
+
+    # You could use email as username or separate username field
+    email = data["email"]
+    password = data["password"]
+    confirm_password = data["confirm_password"]
+
+    if password != confirm_password:
+        return jsonify({"error": "Passwords do not match"}), 400
+
+    if user_collection.find_one({"email": email}):
+        return jsonify({"error": "Email already exists"}), 400
 
     hashed_password = bcrypt.generate_password_hash(password).decode("utf-8")
-    user_data = {"username": username, "email": email, "password": hashed_password}
+
+    user_data = {
+        "email": email,
+        "password": hashed_password,
+        "role": data["role"],
+        "department": data["Dept"],
+        "location": data["location"],
+        "region": data["region"],
+    }
 
     result = user_collection.insert_one(user_data)
 
-    return (
-        jsonify(
-            {
-                "message": "User registered successfully",
-                "user_id": str(result.inserted_id),
-            }
-        ),
-        200,
-    )
+    return jsonify({
+        "message": "User registered successfully",
+        "user_id": str(result.inserted_id)
+    }), 200
 
 @app.route("/login", methods=["POST"])
 def login():
     data = request.get_json()
-    username = data.get("username")
+    email = data.get("email")
     password = data.get("password")
 
-    user_data = user_collection.find_one({"username": username})
+    user_data = user_collection.find_one({"email": email})
 
     if user_data and bcrypt.check_password_hash(user_data["password"], password):
         session["user_id"] = str(user_data["_id"])  # Store user ID in session
         return jsonify({"message": "Login successful"}), 200
     else:
-        return jsonify({"error": "Invalid username or password"}), 401
+        return jsonify({"error": "Invalid email or password"}), 401
     
 @app.route("/agent-chat", methods=["POST"])
 def agent_chat():
-    if "user_id" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
+    user_id = session.get('user_id')  # You can still use this for folder structuring
+    if not user_id:
+        return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+    user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
     data: dict = request.get_json()
     user_message = data["message"]
     if not user_message:
@@ -427,7 +446,7 @@ def agent_chat():
     if not user_data:
         return "User not found", 404
     username = user_data["username"]
-    inputs = {"messages": [{"role": "user", "content": user_message}]}
+    inputs = {"messages": [{"role": "user", "content": user_message}],"department": user_data["department"], "access": user_data["role"]}
     config = {"configurable": {"user_id": user_id, "thread_id": "2"}}
     response = RAG.invoke(inputs, config=config)
     print(f"Response: {response}")
@@ -448,9 +467,11 @@ def classify_file_type(filename):
 
 @app.route('/upload-docs', methods=['POST'])
 def upload_docs():
-    # user_id = session.get('user_id')  # You can still use this for folder structuring
-    user_id= '1923791268182'
-    department="Sales"
+    user_id = session.get('user_id')  # You can still use this for folder structuring
+    if not user_id:
+        return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+    user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
+    department= user_data["department"]
     if not user_id:
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
 
@@ -494,7 +515,7 @@ def upload_docs():
         - Admin has access to all the documents
 
         Respond with a list of user types who are allowed to access the document.""" 
-        context = DataLoader.load_pdf(pdf)
+        context,docs = DataLoader.load_pdf(pdf)
         policy_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", system_prompt),
@@ -504,11 +525,11 @@ def upload_docs():
         llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash')
         policy_agent = policy_prompt | llm.with_structured_output(Policy)
 
-        response, docs = policy_agent.invoke({"context":context})
+        response = policy_agent.invoke({"context":context})
         metadata = response.access
         for doc in docs:
             all_docs_with_metadata.append(Document(page_content=doc.page_content, metadata={"access": metadata, "dept":department}))
-    faiss_folder = os.path.join(UPLOAD_FOLDER, str(user_id), 'faiss_index')
+    faiss_folder = os.path.join(UPLOAD_FOLDER, str(user_id), "text",'faiss_index')
     os.makedirs(faiss_folder, exist_ok=True)
     faiss_index_path = os.path.join(faiss_folder, 'index.faiss')
     print(all_docs_with_metadata[:2])
@@ -527,7 +548,7 @@ def upload_docs():
         )
         vector_store.add_documents(all_docs_with_metadata)
         vector_store.save_local(faiss_index_path)
-    return jsonify({'message': f'{len(saved_files)} file(s) uploaded successfully.'})
+    return jsonify({'message': f'{len(saved_files)} file(s) uploaded successfully.'}),200
 
 
 
