@@ -12,6 +12,8 @@ import Policy from './pages/Policy';
 import ImageDocumentUI from './pages/Image';
 import StructuredDataDocumentUI from './pages/Structure';
 import PDFDocument from './pages/PDFs';import ChatContentKush from './components/ChatContentKush';
+import ConnectedDocsChat from './components/DocumentNode';
+import KushAI from './components/kushAI';
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENTID;
 
@@ -34,6 +36,7 @@ function App() {
             <Route path="structured" element={<StructuredDataDocumentUI />} />
             <Route path="pdfs" element={<PDFDocument />} />
             <Route path="chat-kush" element={<ChatContentKush />} />
+            <Route path="kush-ai" element={<KushAI />} />
           </Route>
         </Routes>
       </BrowserRouter>
