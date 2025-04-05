@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import AdminLayout from './components/AdminLayout';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import Policy from './pages/Policy';
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENTID;
 
@@ -25,6 +26,7 @@ function App() {
             <Route index element={<Home />} />
             <Route path="chat" element={<ChatInterface />} />
             <Route path="all-document" element={<AllDocument />} />
+            <Route path="policy" element={<Policy />} />
           </Route>
         </Routes>
       </BrowserRouter>
