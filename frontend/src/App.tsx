@@ -9,6 +9,7 @@ import Register from './pages/Register';
 import AdminLayout from './components/AdminLayout';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import Policy from './pages/Policy';
+import ChatContentKush from './components/ChatContentKush';
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENTID;
 
@@ -27,6 +28,7 @@ function App() {
             <Route path="chat" element={<ChatInterface />} />
             <Route path="all-document" element={<AllDocument />} />
             <Route path="policy" element={<Policy />} />
+            <Route path="chat-kush" element={<ChatContentKush />} />
           </Route>
         </Routes>
       </BrowserRouter>
