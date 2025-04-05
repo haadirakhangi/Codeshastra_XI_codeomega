@@ -3,7 +3,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import ChatInterface from './pages/ChatInterface';
-import KnowledgeBase from './pages/KnowledgeBase';
+import AllDocument from './pages/AllDocument';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AdminLayout from './components/AdminLayout';
@@ -24,7 +24,7 @@ function App() {
           <Route path="/" element={<AdminLayout />}>
             <Route index element={<Home />} />
             <Route path="chat" element={<ChatInterface />} />
-            <Route path="knowledge-base" element={<KnowledgeBase />} />
+            <Route path="all-document" element={<AllDocument />} />
           </Route>
         </Routes>
       </BrowserRouter>
