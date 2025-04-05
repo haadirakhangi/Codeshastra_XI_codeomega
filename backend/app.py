@@ -11,6 +11,10 @@ from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from core.ingest import DataLoader
 from core.utils import Utilities
+from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
+import faiss
+from langchain_community.docstore.in_memory import InMemoryDocstore
 from flask import (
     Flask,
     redirect,
@@ -448,6 +452,7 @@ def classify_file_type(filename):
 def upload_docs():
     # user_id = session.get('user_id')  # You can still use this for folder structuring
     user_id= '1923791268182'
+    department="Sales"
     if not user_id:
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
 
@@ -483,7 +488,47 @@ def upload_docs():
                 csv.append(file_path)
             elif file_type in ['jpg', 'jpeg', 'png']:
                 image.append(file_path)
+    all_docs_with_metadata=[]
+    for pdf in pdfs:
+        system_prompt= """You have to determine who has access to this document based on the following instruction. The types of users are: intern, manager and admin. 
+        - Legal documents should not be made available to interns
+        - Financial documents should not be made available to manager and intern 
+        - Admin has access to all the documents
 
+        Respond with a list of user types who are allowed to access the document.""" 
+        context = DataLoader.load_pdf(pdf)
+        policy_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system_prompt),
+                ("human", "{context}"),
+            ]
+        )
+        llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash')
+        policy_agent = policy_prompt | llm.with_structured_output(Policy)
+
+        response, docs = policy_agent.invoke({"context":context})
+        metadata = response.access
+        for doc in docs:
+            all_docs_with_metadata.append(Document(page_content=doc.page_content, metadata={"access": metadata, "dept":department}))
+    faiss_folder = os.path.join(UPLOAD_FOLDER, str(user_id), 'faiss_index')
+    os.makedirs(faiss_folder, exist_ok=True)
+    faiss_index_path = os.path.join(faiss_folder, 'index.faiss')
+    print(all_docs_with_metadata[:2])
+
+    if os.path.exists(faiss_index_path):
+        index = (faiss_index_path)
+        vector_store = FAISS.load_local(faiss_index_path, embeddings=EMBEDDINGS, allow_dangerous_deserialization=True)
+        vector_store.add_documents(all_docs_with_metadata)
+    else:
+        index = faiss.IndexFlatL2(768)
+        vector_store = FAISS(
+            embedding_function=EMBEDDINGS,
+            index=index,
+            docstore=InMemoryDocstore(),
+            index_to_docstore_id={}
+        )
+        vector_store.add_documents(all_docs_with_metadata)
+        vector_store.save_local(faiss_index_path)
     return jsonify({'message': f'{len(saved_files)} file(s) uploaded successfully.'})
 
 
