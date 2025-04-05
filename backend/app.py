@@ -109,21 +109,6 @@ grade_prompt = ChatPromptTemplate.from_messages(
 
 retrieval_grader = grade_prompt | structured_llm_grader
 
-
-# GENERATION
-generation_system_prompt = "Generate a detailed report based on the user's request using the information provided to you"
-generation_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", generation_system_prompt),
-        ("human", "Set of facts: \n\n {context} \n\n User question: {question}"),
-    ]
-)
-
-def format_docs(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
-
-rag_chain = generation_prompt | LLM | StrOutputParser()
-
 question = "Generate a report on adversarial attacks on llm"
 structured_llm_checker = LLM.with_structured_output(GradeHallucinations)
 
@@ -213,6 +198,57 @@ def generate(state):
     print("---GENERATE---")
     question = state["question"]
     documents = state["documents"]
+    prompt_type = state["question_type"]
+    generate_report_prompt = """
+You are a senior data analyst. Your job is to generate a clear, well-structured analytical report based on the information provided.
+
+The report should be written in **Markdown format** and cover all relevant aspects based on the context and the user's question.
+
+---
+
+## 🧾 Report Requirements:
+
+1. **Executive Summary**  
+   - Start with a brief summary of the key findings or insights.
+   
+2. **Direct Answer to the User’s Question**  
+   - Provide a focused and data-supported answer.
+
+3. **Key Metrics and Highlights**  
+   - Present relevant quantitative or qualitative metrics depending on the context (e.g., revenue, conversions, sentiment scores, traffic volume, etc.).
+   - Use bullet points.
+
+4. **Trends, Patterns, and Anomalies**  
+   - Highlight any noticeable changes or patterns over time or across segments.
+
+5. **Performance Drivers or Root Causes**  
+   - Explain any underlying factors influencing the outcomes.
+
+6. **Recommendations**  
+   - Include actionable insights or strategic suggestions where applicable.
+
+7. **Professional Formatting**  
+   - Use Markdown elements such as:
+     - Headings (##, ###)
+     - Lists
+     - Bold for emphasis
+"""
+    if prompt_type == "generate_report":
+        print("GENERATING REPORT...")
+        generation_system_prompt = generate_report_prompt
+    else:
+        generation_system_prompt = "You're an AI assistant for Sentra Vault. Answer the user question based on the context provided.\n\n"
+    generation_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", generation_system_prompt),
+            ("human", "SALES DATA / CONTEXT:\n{context}: \n\n USER QUESTION: {question}"),
+        ]
+    )
+
+    # def format_docs(docs):
+    #     return "\n\n".join(doc.page_content for doc in docs)
+
+    rag_chain = generation_prompt | LLM | StrOutputParser()
 
     # RAG generation
     generation = rag_chain.invoke({"context": documents, "question": question})
@@ -420,7 +456,7 @@ RAG = workflow.compile()
 
 UPLOAD_FOLDER = 'uploads'
 FILE_LIST_PATH = 'uploaded_files.json'
-ALLOWED_EXTENSIONS = {'pdf', 'txt', 'jpg', 'jpeg', 'png'}
+ALLOWED_EXTENSIONS = {'pdf', 'txt', 'jpg', 'jpeg', 'png', 'csv'}
 
 # Make sure the upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -585,7 +621,7 @@ def upload_docs():
     files = request.files.getlist('files')
     saved_files = []
     pdfs = []
-    csv  = []
+    csvs  = []
     image = []
     for file in files:
         if file and allowed_file(file.filename):
@@ -608,9 +644,10 @@ def upload_docs():
             if file_type == 'pdf':
                 pdfs.append(file_path)
             elif file_type == 'csv':
-                csv.append(file_path)
+                csvs.append(file_path)
             elif file_type in ['jpg', 'jpeg', 'png']:
                 image.append(file_path)
+    print("CSV FILES UPLOADED\n\n",csvs)
     all_docs_with_metadata=[]
     for pdf in pdfs:
         system_prompt= """You have to determine who has access to this document based on the following instruction. The types of users are: intern, manager and admin. 
@@ -620,6 +657,28 @@ def upload_docs():
 
         Respond with a list of user types who are allowed to access the document.""" 
         context,docs = DataLoader.load_pdf(pdf)
+        policy_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system_prompt),
+                ("human", "{context}"),
+            ]
+        )
+        llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash')
+        policy_agent = policy_prompt | llm.with_structured_output(Policy)
+
+        response = policy_agent.invoke({"context":context})
+        metadata = response.access
+        # print("metadata", metadata)
+        for doc in docs:
+            all_docs_with_metadata.append(Document(page_content=doc.page_content, metadata={"access": metadata, "dept":department}))
+    for csv in csvs:
+        system_prompt= """You have to determine who has access to this document based on the following instruction. The types of users are: intern, manager and admin. 
+        - Legal documents should not be made available to interns
+        - Financial documents should not be made available to manager and intern 
+        - Admin has access to all the documents
+
+        Respond with a list of user types who are allowed to access the document.""" 
+        context,docs = DataLoader.load_csv(csv)
         policy_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", system_prompt),
