@@ -55,7 +55,7 @@ const ChatContent: React.FC = () => {
     setResponse(null);
 
     try {
-      const res = await axios.post('http://localhost:5000/chat', { query });
+      const res = await axios.post('/api/agent-chat', { query });
       const reply = res.data?.response || 'No response from backend.';
       setMessages(prev => [...prev, { sender: 'bot', text: reply }]);
     } catch (error) {

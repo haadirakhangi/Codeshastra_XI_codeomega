@@ -33,13 +33,13 @@ const AllDocument: React.FC = () => {
             All (1)
           </button>
           <button className="bg-white border-t border-b border-gray-200 text-gray-900 px-6 py-2 hover:bg-gray-50 focus:z-10 focus:ring-2 focus:ring-blue-500">
-            PDFs (1)
+            Drive (1)
           </button>
           <button className="bg-white border-t border-b border-gray-200 text-gray-900 px-6 py-2 hover:bg-gray-50 focus:z-10 focus:ring-2 focus:ring-blue-500">
-            Images (0)
+            Dropbox (0)
           </button>
           <button className="bg-white border border-gray-200 text-gray-900 px-6 py-2 rounded-r-md hover:bg-gray-50 focus:z-10 focus:ring-2 focus:ring-blue-500">
-            Structured Data (0)
+            Notion (0)
           </button>
         </div>
       </div>

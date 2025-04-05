@@ -9,7 +9,9 @@ import Register from './pages/Register';
 import AdminLayout from './components/AdminLayout';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import Policy from './pages/Policy';
-import ChatContentKush from './components/ChatContentKush';
+import ImageDocumentUI from './pages/Image';
+import StructuredDataDocumentUI from './pages/Structure';
+import PDFDocument from './pages/PDFs';import ChatContentKush from './components/ChatContentKush';
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENTID;
 
@@ -28,6 +30,9 @@ function App() {
             <Route path="chat" element={<ChatInterface />} />
             <Route path="all-document" element={<AllDocument />} />
             <Route path="policy" element={<Policy />} />
+            <Route path="images" element={<ImageDocumentUI />} />
+            <Route path="structured" element={<StructuredDataDocumentUI />} />
+            <Route path="pdfs" element={<PDFDocument />} />
             <Route path="chat-kush" element={<ChatContentKush />} />
           </Route>
         </Routes>
