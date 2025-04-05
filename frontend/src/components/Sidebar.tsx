@@ -6,14 +6,16 @@ import { NavLink } from 'react-router-dom';
 const Sidebar: React.FC = () => {
   return (
     <aside className="w-64 border-r border-gray-200 flex flex-col">
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center">
-          <div className="w-8 h-8 rounded-md bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white">
-            <span>E</span>
+      <NavLink to="/">
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center">
+            <div className="w-8 h-8 rounded-md bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white">
+              <span>E</span>
+            </div>
+            <h1 className="ml-2 text-xl font-semibold">EnterpriseRAG</h1>
           </div>
-          <h1 className="ml-2 text-xl font-semibold">EnterpriseRAG</h1>
         </div>
-      </div>
+      </NavLink>
 
       <div className="flex-1 flex flex-col p-4">
         <div className="mb-8">
@@ -29,16 +31,15 @@ const Sidebar: React.FC = () => {
                 Chat Assistant
               </li>
             </NavLink>
-            <NavLink to="/knowledge-base">
-              <li className="flex items-center text-gray-700 hover:bg-gray-100 p-2 rounded-md">
-                <span className="mr-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                  </svg>
-                </span>
-                Knowledge Search
-              </li>
-            </NavLink>
+
+            <li className="flex items-center text-gray-700 hover:bg-gray-100 p-2 rounded-md">
+              <span className="mr-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                </svg>
+              </span>
+              Knowledge Search
+            </li>
             <li className="flex items-center text-gray-700 hover:bg-gray-100 p-2 rounded-md">
               <span className="mr-2">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -53,15 +54,17 @@ const Sidebar: React.FC = () => {
         <div className="mb-8">
           <p className="text-xs text-gray-500 font-medium mb-2">KNOWLEDGE BASE</p>
           <ul className="space-y-2">
-            <li className="flex items-center text-gray-700 hover:bg-gray-100 p-2 rounded-md">
-              <span className="mr-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                  <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
-                </svg>
-              </span>
-              All Documents
-            </li>
+            <NavLink to="/all-document">
+              <li className="flex items-center text-gray-700 hover:bg-gray-100 p-2 rounded-md">
+                <span className="mr-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                  </svg>
+                </span>
+                All Documents
+              </li>
+            </NavLink>
             <li className="flex items-center text-gray-700 hover:bg-gray-100 p-2 rounded-md">
               <span className="mr-2">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
