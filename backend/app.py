@@ -766,7 +766,30 @@ def get_user_files():
         "files": files
     })
 
+@app.route('/upload-new', methods=['POST'])
+def upload_new_files():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+    if 'documents' not in request.files:
+        return jsonify({'error': 'No files part in the request'}), 400
+    files = request.files.getlist('documents')
+    saved_files = []
+    for file in files:
+        if file.filename == '':
+            continue
+        filename = secure_filename(file.filename)
+        folder_type = 'text' if filename.endswith('.pdf') else 'image'
+        user_folder = os.path.join(UPLOAD_FOLDER, str(user_id), folder_type)
+        os.makedirs(user_folder, exist_ok=True)
 
+        file_path = os.path.join(user_folder, filename)
+        file.save(file_path)
+        saved_files.append(filename)
+    return jsonify({
+        'message': f'{len(saved_files)} file(s) uploaded successfully.',
+        'files': saved_files
+    }), 200
 
 @app.route('/uploads/<user_id>/text/<filename>', methods=['GET'])
 def serve_uploaded_file(user_id, filename):
