@@ -1,5 +1,5 @@
 import Sidebar from "../components/Sidebar";
-import MainContent from "../components/ChatAssistant";
+import MainContent from "../components/MainContent";
 import RightPanel from "../components/Right";
 function Home() {
   return (
