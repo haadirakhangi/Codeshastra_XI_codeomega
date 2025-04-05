@@ -20,6 +20,7 @@ import { signIn } from "@/services/api";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { LockPasswordIcon, UserIcon } from "@hugeicons/core-free-icons";
 import { useRouter } from "expo-router";
+import { useSearchParams } from "expo-router/build/hooks";
 
 const LoginScreen = () => {
   const [username, setUsername] = useState("");
@@ -28,6 +29,8 @@ const LoginScreen = () => {
   const [passwordError, setPasswordError] = useState("");
   const [isFormValid, setIsFormValid] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const params = useSearchParams();
+
   const router = useRouter();
 
   const validateUsername = (text: string) => {
@@ -64,13 +67,19 @@ const LoginScreen = () => {
   }, [username, password, usernameError, passwordError]);
 
   const handleLogin = async () => {
+    console.log("here");
     if (!username) setUsernameError("Username is required");
     if (!password) setPasswordError("Password is required");
-
+      const role = params.get("role");
+      console.log("ho" + role)
     if (isFormValid) {
       try {
         // router.push("/home");
-        router.replace("/home");
+        if(role=="user"){
+          router.replace("/home");
+        } else{
+          router.replace("/admin/home");
+        }
         // const result = await signIn(username, password);
       } catch (error) {
         console.log(error);

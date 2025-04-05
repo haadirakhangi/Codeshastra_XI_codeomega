@@ -11,7 +11,8 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import Policy from './pages/Policy';
 import ImageDocumentUI from './pages/Image';
 import StructuredDataDocumentUI from './pages/Structure';
-import PDFDocument from './pages/PDFs';
+import PDFDocument from './pages/PDFs';import ChatContentKush from './components/ChatContentKush';
+
 const clientId = import.meta.env.VITE_GOOGLE_CLIENTID;
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
             <Route path="images" element={<ImageDocumentUI />} />
             <Route path="structured" element={<StructuredDataDocumentUI />} />
             <Route path="pdfs" element={<PDFDocument />} />
+            <Route path="chat-kush" element={<ChatContentKush />} />
           </Route>
         </Routes>
       </BrowserRouter>
