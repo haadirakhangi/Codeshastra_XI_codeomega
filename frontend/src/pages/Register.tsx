@@ -3,20 +3,15 @@ export default function Register() {
         <>
             <div className="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
                 <div className="sm:mx-auto sm:w-full sm:max-w-4xl">
-                    <img
-                        className="mx-auto h-10 w-auto"
-                        src="https://tailwindcss.com/plus-assets/img/logos/mark.svg?color=indigo&shade=600"
-                        alt="Your Company"
-                    />
-                    <h2 className="mt-10 text-center text-2xl font-bold tracking-tight text-gray-900">
+                    <h2 className="text-center text-2xl font-bold tracking-tight text-gray-900">
                         Register your account
                     </h2>
                 </div>
 
-                <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-4xl">
-                    <form className="grid grid-cols-1 md:grid-cols-2 gap-6" action="#" method="POST">
+                <div className="sm:mx-auto sm:w-full sm:max-w-xl md:max-w-2xl">
+                    <form className="" action="#" method="POST">
                         {/* Column 1 Inputs */}
-                        <div>
+                        <div className="p-2">
                             <label htmlFor="email" className="block text-sm font-medium text-gray-900">
                                 Email address
                             </label>
@@ -32,70 +27,48 @@ export default function Register() {
                             </div>
                         </div>
 
-                        <div>
-                            <label htmlFor="userRole" className="block text-sm font-medium text-gray-900">
+                        <div className="p-2">
+                            <label htmlFor="role" className="block text-sm font-medium text-gray-900">
                                 User Role
                             </label>
                             <div className="mt-2">
-                                <input
-                                    type="text"
-                                    name="userRole"
-                                    id="userRole"
+                                <select
+                                    name="role"
+                                    id="role"
                                     required
-                                    placeholder="e.g., Admin, Manager"
-                                    className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
-                                />
+                                    className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
+                                >
+                                    <option value="">Select Role</option>
+                                    <option value="NA">Admin</option>
+                                    <option value="EU">Manager</option>
+                                    <option value="APAC">Intern</option>
+                                </select>
                             </div>
                         </div>
 
-                        <div>
-                            <label htmlFor="department" className="block text-sm font-medium text-gray-900">
+                        <div className="p-2">
+                            <label htmlFor="Dept" className="block text-sm font-medium text-gray-900">
                                 Department
                             </label>
                             <div className="mt-2">
-                                <input
-                                    type="text"
-                                    name="department"
-                                    id="department"
-                                    placeholder="e.g., IT, Finance"
-                                    className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label htmlFor="employeeStatus" className="block text-sm font-medium text-gray-900">
-                                Employee Status
-                            </label>
-                            <div className="mt-2">
-                                <input
-                                    type="text"
-                                    name="employeeStatus"
-                                    id="employeeStatus"
+                                <select
+                                    name="Dept"
+                                    id="Dept"
                                     required
-                                    placeholder="e.g., Full-time, Contract"
-                                    className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
-                                />
+                                    className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
+                                >
+                                    <option value="">Select Department</option>
+                                    <option value="NA">Sales</option>
+                                    <option value="EU">Legal</option>
+                                    <option value="APAC">Operations</option>
+                                    <option value="APAC">Finance</option>
+                                    <option value="APAC">HR</option>
+                                </select>
                             </div>
                         </div>
 
-                        <div>
-                            <label htmlFor="timeInPosition" className="block text-sm font-medium text-gray-900">
-                                Time in Position
-                            </label>
-                            <div className="mt-2">
-                                <input
-                                    type="text"
-                                    name="timeInPosition"
-                                    id="timeInPosition"
-                                    required
-                                    placeholder="e.g., 2 years"
-                                    className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
-                                />
-                            </div>
-                        </div>
 
-                        <div>
+                        <div className="p-2">
                             <label htmlFor="location" className="block text-sm font-medium text-gray-900">
                                 Location
                             </label>
@@ -111,71 +84,23 @@ export default function Register() {
                             </div>
                         </div>
 
-                        <div>
-                            <label htmlFor="deviceType" className="block text-sm font-medium text-gray-900">
-                                Device Type
+                        <div className="p-2">
+                            <label htmlFor="region" className="block text-sm font-medium text-gray-900">
+                                Region
                             </label>
                             <div className="mt-2">
                                 <input
                                     type="text"
-                                    name="deviceType"
-                                    id="deviceType"
-                                    placeholder="e.g., Laptop, Mobile"
+                                    name="region"
+                                    id="region"
+                                    required
+                                    autoComplete="region"
                                     className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
                                 />
                             </div>
                         </div>
 
-                        <div>
-                            <label htmlFor="lastTraining" className="block text-sm font-medium text-gray-900">
-                                Last Security Training
-                            </label>
-                            <div className="mt-2">
-                                <input
-                                    type="date"
-                                    name="lastTraining"
-                                    id="lastTraining"
-                                    className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label htmlFor="joinDate" className="block text-sm font-medium text-gray-900">
-                                Employee Join Date
-                            </label>
-                            <div className="mt-2">
-                                <input
-                                    type="date"
-                                    name="joinDate"
-                                    id="joinDate"
-                                    className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label htmlFor="region" className="block text-sm font-medium text-gray-900">
-                                Region
-                            </label>
-                            <div className="mt-2">
-                                <select
-                                    name="region"
-                                    id="region"
-                                    required
-                                    className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
-                                >
-                                    <option value="">Select Region</option>
-                                    <option value="NA">NA</option>
-                                    <option value="EU">EU</option>
-                                    <option value="APAC">APAC</option>
-                                    <option value="LATAM">LATAM</option>
-                                    <option value="Unknown">Unknown</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div>
+                        <div className="p-2">
                             <label htmlFor="password" className="block text-sm font-medium text-gray-900">
                                 Password
                             </label>
@@ -185,13 +110,13 @@ export default function Register() {
                                     name="password"
                                     id="password"
                                     required
-                                    autoComplete="current-password"
+                                    autoComplete="password"
                                     className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
                                 />
                             </div>
                         </div>
 
-                        <div>
+                        <div className="p-2">
                             <label htmlFor="password" className="block text-sm font-medium text-gray-900">
                               Confirm  Password
                             </label>
