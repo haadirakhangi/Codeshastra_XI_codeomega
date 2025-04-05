@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import DataSourceModal from './DataSourceModal';
+import GDrivePicker from './GdrivePicker';
 
 const MainContent: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -6,8 +8,11 @@ const MainContent: React.FC = () => {
   const [response, setResponse] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ name: string; progress: number }[]>([]);
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]); // ✅ Store uploaded files
-  const [uploadNotification, setUploadNotification] = useState<string | null>(null); // ✅ Show upload notification
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadNotification, setUploadNotification] = useState<string | null>(null);
+  const [showDataSourceModal, setShowDataSourceModal] = useState(false);
+  const [gdriveFiles, setGdriveFiles] = useState<{ id: string; name: string }[]>([]);
+  const [showGDrivePicker, setShowGDrivePicker] = useState(false);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -23,7 +28,6 @@ const MainContent: React.FC = () => {
     setUploadProgress(progressData);
     setUploading(true);
 
-    // ✅ Simulate upload progress
     fileArray.forEach((file, index) => {
       let progress = 0;
       const interval = setInterval(() => {
@@ -37,14 +41,11 @@ const MainContent: React.FC = () => {
         if (progress >= 100) {
           clearInterval(interval);
 
-          // ✅ When last file completes
           if (index === fileArray.length - 1) {
             setTimeout(() => {
               setUploading(false);
-              setUploadedFiles((prev) => [...prev, ...fileArray]); // ✅ Store files
+              setUploadedFiles((prev) => [...prev, ...fileArray]);
               setUploadProgress([]);
-
-              // ✅ Show notification
               setUploadNotification(`${fileArray.length} file(s) uploaded successfully.`);
               setTimeout(() => setUploadNotification(null), 3000);
             }, 500);
@@ -74,16 +75,40 @@ const MainContent: React.FC = () => {
     }, 1000);
   };
 
+  const handleAuthClick = async (provider: 'gdrive' | 'dropbox' | 'notion') => {
+    if (provider === 'gdrive') {
+      // Close modal and open Google Drive picker
+      setShowDataSourceModal(false);
+      setShowGDrivePicker(true);
+    }
+    // Future implementations for Dropbox and Notion go here
+  };
+
   return (
     <main className="flex-1 flex flex-col relative">
-      {/* ✅ Notification */}
       {uploadNotification && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-100 text-green-800 px-4 py-2 rounded-md shadow-md z-10">
           {uploadNotification}
         </div>
       )}
 
-      {/* Top Bar */}
+      {showDataSourceModal && (
+        <DataSourceModal onAuthClick={handleAuthClick} onClose={() => setShowDataSourceModal(false)} />
+      )}
+
+      {showGDrivePicker && (
+        <div className="p-4">
+          <GDrivePicker
+            onFilesSelected={(files) => {
+              setGdriveFiles(files);
+              setUploadNotification(`${files.length} file(s) imported from Google Drive.`);
+              setShowGDrivePicker(false);
+              setTimeout(() => setUploadNotification(null), 3000);
+            }}
+          />
+        </div>
+      )}
+
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
         <div className="relative w-full max-w-lg">
           <input
@@ -103,7 +128,6 @@ const MainContent: React.FC = () => {
         </div>
         <div className="flex items-center">
           <button className="ml-2 p-2 hover:bg-gray-100 rounded-md">
-            {/* Notification Icon */}
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405..." />
             </svg>
@@ -112,7 +136,6 @@ const MainContent: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content */}
       {!submitted ? (
         <div className="flex-1 p-6 overflow-auto">
           <div className="border border-gray-200 rounded-lg p-6 mb-8">
@@ -133,17 +156,31 @@ const MainContent: React.FC = () => {
                       onChange={handleFileUpload}
                     />
                   </label>
-                  <button className="flex items-center px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50">
+                  <button
+                    onClick={() => setShowDataSourceModal(true)}
+                    className="flex items-center px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
                     Connect Data Source
                   </button>
                 </div>
-                {/* ✅ List Uploaded Files */}
+
                 {uploadedFiles.length > 0 && (
                   <div className="mt-6">
                     <h4 className="text-gray-700 font-medium mb-2">Uploaded Files:</h4>
                     <ul className="list-disc ml-5 text-sm text-gray-800">
                       {uploadedFiles.map((file, idx) => (
                         <li key={idx}>{file.name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {gdriveFiles.length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="text-gray-700 font-medium mb-2">Google Drive Files:</h4>
+                    <ul className="list-disc ml-5 text-sm text-gray-800">
+                      {gdriveFiles.map((file) => (
+                        <li key={file.id}>{file.name}</li>
                       ))}
                     </ul>
                   </div>
@@ -169,7 +206,6 @@ const MainContent: React.FC = () => {
             )}
           </div>
 
-          {/* Suggested Prompts */}
           <div className="mb-8">
             <h3 className="text-gray-700 font-medium mb-4">Try asking about:</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -201,12 +237,9 @@ const MainContent: React.FC = () => {
         </div>
       )}
 
-      {/* Chat Input */}
       <div className="border-t border-gray-200 pt-4 px-6">
         <div className="flex items-center bg-white border border-gray-200 rounded-lg p-2">
-          <button className="p-2 text-gray-500 hover:text-gray-700">
-            {/* Optional Icon */}
-          </button>
+          <button className="p-2 text-gray-500 hover:text-gray-700"></button>
           <input
             type="text"
             value={query}
