@@ -13,7 +13,6 @@ from core.ingest import DataLoader
 from core.utils import Utilities
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
 import faiss
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from flask import (
@@ -24,6 +23,7 @@ from flask import (
     Response,
     stream_with_context,
     session,
+    send_from_directory,
 )
 import json
 from pymongo import MongoClient
@@ -34,6 +34,7 @@ from pymongo.server_api import ServerApi
 from urllib.parse import quote_plus
 from bson import ObjectId
 from werkzeug.utils import secure_filename
+from datetime import datetime
 
 from models.data_models import *
 
@@ -58,16 +59,37 @@ EMBEDDINGS = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
 
 
 # ROUTER
-structured_llm_router = LLM.with_structured_output(RouteQuery)
-router_system_prompt = """You are an expert at routing a user's question. Understand the user query and decide where to route the user question. 
-Choose one of:
-'vectorstore' : when external data is required to answer the question or user asks in general question.
-'generate_report': Question which involves generating report.
-'write_email': If writing an email is required."""
+structured_llm_router = LLM.with_structured_output(AnalyzeQuery)
+router_system_prompt = """You are an expert in analyzing user queries to determine the correct routing destination and whether access should be granted to documents from different departments.
+
+DEPARTMENTS:
+- hr
+- sales
+- legal
+
+ROUTES:
+- 'vectorstore': Use when the user asks general questions or external data is required.
+- 'generate_report': Use when the user asks to generate or request a report.
+- 'write_email': Use when the user asks for help composing or sending an email.
+
+ACCESS CONTROL RULES:
+- The user should typically be given access to the documents from their own department.
+- Only provide access if:
+    1. The task clearly requires a higher access level.
+    2. The policy instructions explicitly permit it.
+
+INSTRUCTIONS:
+{instructions}
+
+
+OUTPUT:
+- route: One of ['vectorstore', 'generate_report', 'write_email']
+- access_level: Final access level to be used (same as original unless changed per policy)
+"""
 route_prompt = ChatPromptTemplate.from_messages(
     [
         ("system", router_system_prompt),
-        ("human", "{question}"),
+        ("human", "INPUT:\n- user's current department: {department}\n- user's question: {question}"),
     ]
 )
 
@@ -88,21 +110,6 @@ grade_prompt = ChatPromptTemplate.from_messages(
 )
 
 retrieval_grader = grade_prompt | structured_llm_grader
-
-
-# GENERATION
-generation_system_prompt = "Generate a detailed report based on the user's request using the information provided to you"
-generation_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", generation_system_prompt),
-        ("human", "Set of facts: \n\n {context} \n\n User question: {question}"),
-    ]
-)
-
-def format_docs(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
-
-rag_chain = generation_prompt | LLM | StrOutputParser()
 
 question = "Generate a report on adversarial attacks on llm"
 structured_llm_checker = LLM.with_structured_output(GradeHallucinations)
@@ -163,7 +170,7 @@ def retrieve(state):
     print("---RETRIEVE---")
     question = state["question"]
     dept = state["department"]
-    access = state["access"]
+    new_dept = state["new_dept"]
     user_id = session["user_id"]
     faiss_index_path = os.path.join(UPLOAD_FOLDER, str(user_id), "text",'faiss_index', 'index.faiss')
     # print(f"FAISS index path: {faiss_index_path}")
@@ -173,9 +180,9 @@ def retrieve(state):
     compression_retriever = ContextualCompressionRetriever(
         base_compressor=compressor, base_retriever=vectorstore.as_retriever()
     )
-
+    query = {"$or": [{"dept": page} for page in new_dept]}
     # Retrieval
-    documents = compression_retriever.invoke(question,metadata_filter={"access":access, "dept":dept})
+    documents = compression_retriever.invoke(question, metadata_filter={"access":query})
     print(documents[:2])
     # print(documents[0])
     return {"documents": documents, "question": question}
@@ -193,6 +200,57 @@ def generate(state):
     print("---GENERATE---")
     question = state["question"]
     documents = state["documents"]
+    prompt_type = state["question_type"]
+    generate_report_prompt = """
+You are a senior data analyst. Your job is to generate a clear, well-structured analytical report based on the information provided.
+
+The report should be written in **Markdown format** and cover all relevant aspects based on the context and the user's question.
+
+---
+
+## 🧾 Report Requirements:
+
+1. **Executive Summary**  
+   - Start with a brief summary of the key findings or insights.
+   
+2. **Direct Answer to the User’s Question**  
+   - Provide a focused and data-supported answer.
+
+3. **Key Metrics and Highlights**  
+   - Present relevant quantitative or qualitative metrics depending on the context (e.g., revenue, conversions, sentiment scores, traffic volume, etc.).
+   - Use bullet points.
+
+4. **Trends, Patterns, and Anomalies**  
+   - Highlight any noticeable changes or patterns over time or across segments.
+
+5. **Performance Drivers or Root Causes**  
+   - Explain any underlying factors influencing the outcomes.
+
+6. **Recommendations**  
+   - Include actionable insights or strategic suggestions where applicable.
+
+7. **Professional Formatting**  
+   - Use Markdown elements such as:
+     - Headings (##, ###)
+     - Lists
+     - Bold for emphasis
+"""
+    if prompt_type == "generate_report":
+        print("GENERATING REPORT...")
+        generation_system_prompt = generate_report_prompt
+    else:
+        generation_system_prompt = "You're an AI assistant for Sentra Vault. Answer the user question based on the context provided.\n\n"
+    generation_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", generation_system_prompt),
+            ("human", "SALES DATA / CONTEXT:\n{context}: \n\n USER QUESTION: {question}"),
+        ]
+    )
+
+    # def format_docs(docs):
+    #     return "\n\n".join(doc.page_content for doc in docs)
+
+    rag_chain = generation_prompt | LLM | StrOutputParser()
 
     # RAG generation
     generation = rag_chain.invoke({"context": documents, "question": question})
@@ -226,7 +284,7 @@ def grade_documents(state):
         else:
             print("---GRADE: DOCUMENT NOT RELEVANT---")
             continue
-    return {"documents": filtered_docs, "question": question}
+    return {"filtered_documents": filtered_docs, "question": question}
 
 
 def transform_query(state):
@@ -261,10 +319,11 @@ def classify_user_query(state):
 
     print("---CLASSIFYING INPUT---")
     question = state["question"]
-    
-    response = question_router.invoke({"question":question})
+    department = state["department"]
+    instructions = state["instructions"]    
+    response = question_router.invoke({"question":question, "department": department, "instructions": instructions})
 
-    return {"question_type": response.route}
+    return {"question_type": response.route, "new_dept":response.dept_access}
 
 def decide_to_generate(state):
     """
@@ -279,13 +338,12 @@ def decide_to_generate(state):
 
     print("---ASSESS GRADED DOCUMENTS---")
     state["question"]
-    filtered_documents = state["documents"]
+    new_dept = state["new_dept"]
+    filtered_documents = state["filtered_documents"]
 
     if not filtered_documents:
-        print(
-            "---DECISION: ALL DOCUMENTS ARE NOT RELEVANT TO QUESTION, TRANSFORM QUERY---"
-        )
-        return "transform_query"
+        print("---DECISION: RAISE ERROR---")
+        return "raise_error"
     else:
         # We have relevant documents, so generate answer
         print("---DECISION: GENERATE---")
@@ -327,6 +385,21 @@ def grade_generation_v_documents_and_question(state):
         print("---DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS, RE-TRY---")
         return "not supported"
 
+def raise_error(state):
+    """
+    Raise an error if the user is trying to access a document they are not authorized for.
+
+    Args:
+        state (dict): The current graph state
+
+    Returns:
+        str: Error message
+    """
+    documents = state["documents"]
+    document_department = documents[0].metadata["dept"]
+    print(f"Document department: {documents[:5]}")
+    return {"error": f"User is not authorized to access documents. Please contact your manager for access."}
+
 class GraphState(TypedDict):
     """
     Represents the state of our graph.
@@ -338,6 +411,10 @@ class GraphState(TypedDict):
         question_type: type of question
         department: department of user
         access: access level of user
+        new_dept: new department to access
+        instructions: instructions or policy
+        error: error message
+        filtered_documents: filtered documents based on relevance
     """
 
     question: str
@@ -345,7 +422,11 @@ class GraphState(TypedDict):
     documents: List[str]
     question_type : str
     department: str
-    access: str
+    access: List[str]
+    new_dept : List[str]
+    instructions: str
+    error: str
+    filtered_documents: List[Document]
 
 
 workflow = StateGraph(GraphState)
@@ -355,29 +436,29 @@ workflow.add_node("classify_user_query", classify_user_query)
 workflow.add_node("retrieve", retrieve)  # retrieve
 workflow.add_node("grade_documents", grade_documents)  # grade documents
 workflow.add_node("generate", generate)  # generatae
-workflow.add_node("transform_query", transform_query)  # transform_query
+workflow.add_node("raise_error", raise_error) 
 
 # Build graph
 workflow.add_edge(START, "classify_user_query")
 workflow.add_edge("classify_user_query", "retrieve")
 workflow.add_edge("retrieve", "grade_documents")
-workflow.add_edge("transform_query", "retrieve")
 workflow.add_conditional_edges(
     "grade_documents",
     decide_to_generate,
     {
-        "transform_query": "transform_query",
+        "raise_error": "raise_error",
         "generate": "generate",
     },
 )
 workflow.add_edge("generate",END)
+workflow.add_edge("raise_error", END)
 
 # Compile
 RAG = workflow.compile()
 
 UPLOAD_FOLDER = 'uploads'
 FILE_LIST_PATH = 'uploaded_files.json'
-ALLOWED_EXTENSIONS = {'pdf', 'txt', 'jpg', 'jpeg', 'png'}
+ALLOWED_EXTENSIONS = {'pdf', 'txt', 'jpg', 'jpeg', 'png', 'csv'}
 
 # Make sure the upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -449,43 +530,63 @@ def agent_chat():
     user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
     if not user_data:
         return "User not found", 404
-    inputs = {"question": user_message,"department": user_data["department"], "access": user_data["role"]}
+    instructions = """- Legal documents should only be accessed or referenced by managers or admins. Interns are strictly prohibited.
+- Sales documents may be accessed by interns, managers, and admins.
+- HR-related documents can be accessed by managers and admins. Interns may request access but should not be elevated unless explicitly approved.
+- Technical documentation is open to all roles.
+- If the user requests access to a document they are not authorized for, do not elevate their access unless business-critical justification is clearly present in the query.
+"""
+    inputs = {"question": user_message,"department": user_data["department"], "access": user_data["role"], "instructions": instructions}
     config = {"configurable": {"user_id": user_id, "thread_id": "2"}}
     def generate():
         for s in RAG.stream(
-            inputs, config=config, stream_mode="messages"
+            inputs, config=config, stream_mode=["values", "messages"]
         ):
-            print(f"\n\nStreamed response: \n{s}\n\n")
+            # print(f"\n\nStreamed response: \n{s}\n\n")
             function_name = None
             arguments = None
             function_call = False
             tool_call = False
             tool_name = None
-            print(f"Streamed response: {s}")
-            if hasattr(s[0], "additional_kwargs") and s[0].additional_kwargs.get(
-                "function_call"
-            ):
-                print(f"Function call: {s[0].additional_kwargs['function_call']}")
-                function_call = True
-                function_name = s[0].additional_kwargs["function_call"]["name"]
-                arguments = json.loads(
-                    s[0].additional_kwargs["function_call"]["arguments"]
-                )
-            elif hasattr(s[0], "tool_call_id"):
-                print(f"Tool call: {s[0].name}")
-                tool_name = s[0].name
-                tool_call = True
+            if s[0]=="messages":
+                s = s[1]
+                if hasattr(s[0], "additional_kwargs") and s[0].additional_kwargs.get(
+                    "function_call"
+                ):
+                    print(f"Function call: {s[0].additional_kwargs['function_call']}")
+                    function_call = True
+                    function_name = s[0].additional_kwargs["function_call"]["name"]
+                    arguments = json.loads(
+                        s[0].additional_kwargs["function_call"]["arguments"]
+                    )
+                elif hasattr(s[0], "tool_call_id"):
+                    print(f"Tool call: {s[0].name}")
+                    tool_name = s[0].name
+                    tool_call = True
 
-            data = {
-                "content": s[0].content,
-                "function_call": function_call,
-                "function_name": function_name,
-                "arguments": arguments,
-                "tool_call": tool_call,
-                "tool_name": tool_name,
-            }
-
-            yield f"data: {json.dumps(data)}\n\n".encode("utf-8")
+                data = {
+                    "payload_type": "message",
+                    "content": s[0].content,
+                    "function_call": function_call,
+                    "function_name": function_name,
+                    "arguments": arguments,
+                    "tool_call": tool_call,
+                    "tool_name": tool_name,
+                }
+                yield f"data: {json.dumps(data)}\n\n".encode("utf-8")
+            elif s[0] == "values":
+                values_data = s[1]
+                if "error" in values_data:
+                    error_message = values_data["error"]
+                    data = {
+                        "payload_type": "values",
+                        "error": error_message,
+                    }
+                else:
+                    data = {
+                        "payload_type": "values",
+                    }
+                yield f"data: {json.dumps(data)}\n\n".encode("utf-8")
     return Response(
         stream_with_context(generate()),
         mimetype="text/event-stream",
@@ -522,7 +623,7 @@ def upload_docs():
     files = request.files.getlist('files')
     saved_files = []
     pdfs = []
-    csv  = []
+    csvs  = []
     image = []
     for file in files:
         if file and allowed_file(file.filename):
@@ -545,9 +646,10 @@ def upload_docs():
             if file_type == 'pdf':
                 pdfs.append(file_path)
             elif file_type == 'csv':
-                csv.append(file_path)
+                csvs.append(file_path)
             elif file_type in ['jpg', 'jpeg', 'png']:
                 image.append(file_path)
+    print("CSV FILES UPLOADED\n\n",csvs)
     all_docs_with_metadata=[]
     for pdf in pdfs:
         system_prompt= """You have to determine who has access to this document based on the following instruction. The types of users are: intern, manager and admin. 
@@ -557,6 +659,28 @@ def upload_docs():
 
         Respond with a list of user types who are allowed to access the document.""" 
         context,docs = DataLoader.load_pdf(pdf)
+        policy_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system_prompt),
+                ("human", "{context}"),
+            ]
+        )
+        llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash')
+        policy_agent = policy_prompt | llm.with_structured_output(Policy)
+
+        response = policy_agent.invoke({"context":context})
+        metadata = response.access
+        # print("metadata", metadata)
+        for doc in docs:
+            all_docs_with_metadata.append(Document(page_content=doc.page_content, metadata={"access": metadata, "dept":department}))
+    for csv in csvs:
+        system_prompt= """You have to determine who has access to this document based on the following instruction. The types of users are: intern, manager and admin. 
+        - Legal documents should not be made available to interns
+        - Financial documents should not be made available to manager and intern 
+        - Admin has access to all the documents
+
+        Respond with a list of user types who are allowed to access the document.""" 
+        context,docs = DataLoader.load_csv(csv)
         policy_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", system_prompt),
@@ -593,6 +717,67 @@ def upload_docs():
     return jsonify({'message': f'{len(saved_files)} file(s) uploaded successfully.'}),200
 
 
+@app.route('/upload', methods=['POST'])
+def upload_files():
+    if 'documents' not in request.files:
+        return jsonify({'error': 'No files part in the request'}), 400
+
+    files = request.files.getlist('documents')
+    saved_files = []
+
+    for file in files:
+        if file.filename == '':
+            continue
+        filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}-{secure_filename(file.filename)}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        saved_files.append(filename)
+
+    return jsonify({
+        'message': 'Files uploaded successfully!',
+        'files': saved_files
+    }), 200
+
+
+
+@app.route('/files', methods=['GET'])
+def get_user_files():
+    user_id = session.get('user_id')  # You can still use this for folder structuring
+    if not user_id:
+        return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+    user_dir = os.path.join('./uploads', user_id, 'text')
+    
+    if not os.path.exists(user_dir):
+        return jsonify({"message": "No files found for this user."}), 404
+
+    files = []
+    for filename in os.listdir(user_dir):
+        file_path = os.path.join(user_dir, filename)
+        if os.path.isfile(file_path):
+            files.append({
+                "filename": filename,
+                "path": f"uploads/{user_id}/text/{filename}"
+            })
+
+    return jsonify({
+        "user_id": user_id,
+        "files": files
+    })
+
+
+
+@app.route('/uploads/<user_id>/text/<filename>', methods=['GET'])
+def serve_uploaded_file(user_id, filename):
+ # You can still use this for folder structuring
+    print(f"Current user ID: {user_id}")
+  
+
+    file_path = os.path.join("uploads", user_id, "text")
+
+    print(f"File path: {file_path}")
+    return send_from_directory(file_path, filename, as_attachment=False)
+   
+     
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
