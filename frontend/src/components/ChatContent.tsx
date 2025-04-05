@@ -3,7 +3,7 @@ import { useState, useRef } from 'react';
 import { FaPaperclip, FaMicrophone, FaUserCircle, FaRobot, FaDropbox, FaRegFileAlt } from 'react-icons/fa';
 import { SiNotion } from 'react-icons/si';
 import { FcGoogle } from 'react-icons/fc';
-
+import GDrivePicker from '../components/GdrivePicker';
 
 const ChatContent: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -14,6 +14,8 @@ const ChatContent: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [showGDrivePicker, setShowGDrivePicker] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<{ id: string; name: string }[]>([]);
+
 
 
   const handleExternalSource = (source: string) => {
@@ -24,7 +26,7 @@ const ChatContent: React.FC = () => {
       alert(`Connect to ${source} (coming soon)`);
     }
   };
-  
+
 
   const handleSend = async () => {
     if (!query.trim()) return;
@@ -62,28 +64,65 @@ const ChatContent: React.FC = () => {
     recognition.onend = () => setListening(false);
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
     const formData = new FormData();
     Array.from(files).forEach((file) => formData.append('files', file));
 
-    axios.post('http://localhost:5000/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-      .then(() => {
-        setUploadNotification(`${files.length} file(s) uploaded successfully.`);
-        setTimeout(() => setUploadNotification(null), 3000);
-      })
-      .catch(() => {
-        setUploadNotification('Upload failed.');
-        setTimeout(() => setUploadNotification(null), 3000);
+    try {
+      const res = await axios.post('/api/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
+
+      const uploaded = Array.from(files).map((f) => ({ id: f.name, name: f.name }));
+      setUploadedFiles(prev => [...prev, ...uploaded]);
+
+      setUploadNotification(`${files.length} file(s) uploaded successfully.`);
+      setTimeout(() => setUploadNotification(null), 3000);
+    } catch {
+      setUploadNotification('Upload failed.');
+      setTimeout(() => setUploadNotification(null), 3000);
+    }
   };
+
 
   return (
     <main className="flex-1 flex flex-col h-screen relative bg-gray-50">
+
+      {showGDrivePicker && (
+        <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm z-30 flex items-center justify-center">
+          <div className="bg-white rounded-xl p-6 shadow-lg max-w-md w-full">
+            <GDrivePicker
+              onFilesSelected={async (files) => {
+                try {
+                  const res = await axios.post('/api/upload_gdrive', { files });
+                  if (res.status === 200) {
+                    setUploadedFiles(prev => [...prev, ...files]);
+                    setMessages(prev => [
+                      ...prev,
+                      { sender: 'bot', text: `Data uploaded successfully from Google Drive.` }
+                    ]);
+                  } else {
+                    setMessages(prev => [
+                      ...prev,
+                      { sender: 'bot', text: `Failed to upload data from Google Drive.` }
+                    ]);
+                  }
+                } catch {
+                  setMessages(prev => [
+                    ...prev,
+                    { sender: 'bot', text: `Failed to upload data from Google Drive.` }
+                  ]);
+                }
+                setShowGDrivePicker(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {uploadNotification && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-100 text-green-800 px-4 py-2 rounded-md shadow-md z-10">
           {uploadNotification}
