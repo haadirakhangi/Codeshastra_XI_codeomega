@@ -444,7 +444,7 @@ def classify_file_type(filename):
         return 'image'
     return None  # Ignore other types
 
-@app.route('/api/upload-docs', methods=['POST'])
+@app.route('/upload-docs', methods=['POST'])
 def upload_docs():
     # user_id = session.get('user_id')  # You can still use this for folder structuring
     user_id= '1923791268182'
@@ -477,7 +477,12 @@ def upload_docs():
             saved_files.append(file_path)
 
             # Append to global list
-            file_type.append(file_path)
+            if file_type == 'pdf':
+                pdfs.append(file_path)
+            elif file_type == 'csv':
+                csv.append(file_path)
+            elif file_type in ['jpg', 'jpeg', 'png']:
+                image.append(file_path)
 
     return jsonify({'message': f'{len(saved_files)} file(s) uploaded successfully.'})
 
