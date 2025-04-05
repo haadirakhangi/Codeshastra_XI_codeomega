@@ -1,4 +1,38 @@
+import { useState } from "react";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+
 export default function Register() {
+    const navigate = useNavigate();
+    const [formData, setFormData] = useState({
+        email: "",
+        role: "",
+        Dept: "",
+        location: "",
+        region: "",
+        password: "",
+        confirm_password: ""
+    });
+
+    const handleChange = (e) => {
+        setFormData({
+            ...formData,
+            [e.target.name]: e.target.value
+        });
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+
+        try {
+            const response = await axios.post("/api/register", formData);
+            alert(response.data.message);
+            navigate("/login");
+        } catch (error) {
+            alert(error.response?.data?.error || "Registration failed");
+        }
+    };
+
     return (
         <>
             <div className="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
@@ -9,8 +43,8 @@ export default function Register() {
                 </div>
 
                 <div className="sm:mx-auto sm:w-full sm:max-w-xl md:max-w-2xl">
-                    <form className="" action="#" method="POST">
-                        {/* Column 1 Inputs */}
+                    <form onSubmit={handleSubmit}>
+                        {/* Email */}
                         <div className="p-2">
                             <label htmlFor="email" className="block text-sm font-medium text-gray-900">
                                 Email address
@@ -22,11 +56,14 @@ export default function Register() {
                                     id="email"
                                     autoComplete="email"
                                     required
+                                    value={formData.email}
+                                    onChange={handleChange}
                                     className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
                                 />
                             </div>
                         </div>
 
+                        {/* Role */}
                         <div className="p-2">
                             <label htmlFor="role" className="block text-sm font-medium text-gray-900">
                                 User Role
@@ -36,16 +73,19 @@ export default function Register() {
                                     name="role"
                                     id="role"
                                     required
+                                    value={formData.role}
+                                    onChange={handleChange}
                                     className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
                                 >
                                     <option value="">Select Role</option>
-                                    <option value="NA">Admin</option>
-                                    <option value="EU">Manager</option>
-                                    <option value="APAC">Intern</option>
+                                    <option value="Admin">Admin</option>
+                                    <option value="Manager">Manager</option>
+                                    <option value="Intern">Intern</option>
                                 </select>
                             </div>
                         </div>
 
+                        {/* Department */}
                         <div className="p-2">
                             <label htmlFor="Dept" className="block text-sm font-medium text-gray-900">
                                 Department
@@ -55,19 +95,21 @@ export default function Register() {
                                     name="Dept"
                                     id="Dept"
                                     required
+                                    value={formData.Dept}
+                                    onChange={handleChange}
                                     className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
                                 >
                                     <option value="">Select Department</option>
-                                    <option value="NA">Sales</option>
-                                    <option value="EU">Legal</option>
-                                    <option value="APAC">Operations</option>
-                                    <option value="APAC">Finance</option>
-                                    <option value="APAC">HR</option>
+                                    <option value="Sales">Sales</option>
+                                    <option value="Legal">Legal</option>
+                                    <option value="Operations">Operations</option>
+                                    <option value="Finance">Finance</option>
+                                    <option value="HR">HR</option>
                                 </select>
                             </div>
                         </div>
 
-
+                        {/* Location */}
                         <div className="p-2">
                             <label htmlFor="location" className="block text-sm font-medium text-gray-900">
                                 Location
@@ -79,11 +121,14 @@ export default function Register() {
                                     id="location"
                                     required
                                     placeholder="e.g., NYC Office, Remote - India"
+                                    value={formData.location}
+                                    onChange={handleChange}
                                     className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
                                 />
                             </div>
                         </div>
 
+                        {/* Region */}
                         <div className="p-2">
                             <label htmlFor="region" className="block text-sm font-medium text-gray-900">
                                 Region
@@ -95,11 +140,14 @@ export default function Register() {
                                     id="region"
                                     required
                                     autoComplete="region"
+                                    value={formData.region}
+                                    onChange={handleChange}
                                     className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
                                 />
                             </div>
                         </div>
 
+                        {/* Password */}
                         <div className="p-2">
                             <label htmlFor="password" className="block text-sm font-medium text-gray-900">
                                 Password
@@ -111,14 +159,17 @@ export default function Register() {
                                     id="password"
                                     required
                                     autoComplete="password"
+                                    value={formData.password}
+                                    onChange={handleChange}
                                     className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
                                 />
                             </div>
                         </div>
 
+                        {/* Confirm Password */}
                         <div className="p-2">
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-900">
-                              Confirm  Password
+                            <label htmlFor="confirm_password" className="block text-sm font-medium text-gray-900">
+                                Confirm Password
                             </label>
                             <div className="mt-2">
                                 <input
@@ -127,12 +178,14 @@ export default function Register() {
                                     id="confirm_password"
                                     required
                                     autoComplete="current-password"
+                                    value={formData.confirm_password}
+                                    onChange={handleChange}
                                     className="block w-full rounded-md bg-white px-3 py-1.5 text-gray-900 outline outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
                                 />
                             </div>
                         </div>
 
-                        {/* Full-width submit button */}
+                        {/* Submit */}
                         <div className="col-span-1 md:col-span-2">
                             <button
                                 type="submit"
