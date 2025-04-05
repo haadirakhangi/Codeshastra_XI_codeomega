@@ -549,6 +549,28 @@ def upload_docs():
             elif file_type in ['jpg', 'jpeg', 'png']:
                 image.append(file_path)
     all_docs_with_metadata=[]
+    client = genai.Client(api_key="YOUR_API_KEY")
+
+    import base64
+    def encode_image_base64(image_path):
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode("utf-8")
+
+    # base_list = []
+    # for image_path in image:
+    #     b64_string = encode_image_base64(image_path)
+    #     mime_type = "image/jpeg" if image_path.lower().endswith(("jpg", "jpeg")) else "image/png"
+    #     base_list.append(f"data:{mime_type};base64,{b64_string}")
+
+
+    # # Send to Gemini
+    # response = client.models.generate_content(
+    #     model="gemini-2.0-flash-exp",
+    #     contents=["I want you to analyze these images and give me a summary of its description. i want you to return me a list of images according to list of images provided to you.", base_list],
+    # )
+    
+    # print("Response from Gemini:", response)
+
     for pdf in pdfs:
         system_prompt= """You have to determine who has access to this document based on the following instruction. The types of users are: intern, manager and admin. 
         - Legal documents should not be made available to interns
