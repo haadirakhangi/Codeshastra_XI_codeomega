@@ -4,6 +4,10 @@ import { FaPaperclip, FaMicrophone, FaUserCircle, FaRobot, FaDropbox, FaRegFileA
 import { SiNotion } from 'react-icons/si';
 import { FcGoogle } from 'react-icons/fc';
 import GDrivePicker from '../components/GdrivePicker';
+import DropboxPicker from './DropboxPicker';
+import NotionPicker from './NotionPicker';
+
+
 
 const ChatContent: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -15,6 +19,10 @@ const ChatContent: React.FC = () => {
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [showGDrivePicker, setShowGDrivePicker] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<{ id: string; name: string }[]>([]);
+  const [showDropboxPicker, setShowDropboxPicker] = useState(false);
+  const [showNotionPicker, setShowNotionPicker] = useState(false);
+
+
 
 
 
@@ -22,8 +30,19 @@ const ChatContent: React.FC = () => {
     setShowUploadMenu(false);
     if (source === 'Google Drive') {
       setShowGDrivePicker(true);
-    } else {
-      alert(`Connect to ${source} (coming soon)`);
+      setShowNotionPicker(false);
+      setShowDropboxPicker(false);
+
+    }
+    if (source === 'Dropbox') {
+      setShowDropboxPicker(true);
+      setShowGDrivePicker(false);
+      setShowNotionPicker(false);
+    }
+    if (source === 'Notion') {
+      setShowNotionPicker(true);
+      setShowDropboxPicker(false);
+      setShowGDrivePicker(false);
     }
   };
 
@@ -91,6 +110,29 @@ const ChatContent: React.FC = () => {
   return (
     <main className="flex-1 flex flex-col h-screen relative bg-gray-50">
 
+      {showNotionPicker && (
+        <div className="absolute inset-0 bg-white z-10 overflow-auto">
+          <NotionPicker
+            onPageSelected={async (pages) => {
+              try {
+                const res = await axios.post('http://localhost:5000/upload_notion', { pages });
+                if (res.status === 200) {
+                  setUploadedFiles(prev => [...prev, ...pages]);
+                  setMessages(prev => [...prev, { sender: 'bot', text: 'Data uploaded from Notion successfully.' }]);
+                } else {
+                  setMessages(prev => [...prev, { sender: 'bot', text: 'Failed to upload from Notion.' }]);
+                }
+              } catch {
+                setMessages(prev => [...prev, { sender: 'bot', text: 'Notion upload failed.' }]);
+              }
+              setShowNotionPicker(false);
+            }}
+            onClose={() => setShowNotionPicker(false)}
+          />
+        </div>
+      )}
+
+
       {showGDrivePicker && (
         <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm z-30 flex items-center justify-center">
           <div className="bg-white rounded-xl p-6 shadow-lg max-w-md w-full">
@@ -122,6 +164,29 @@ const ChatContent: React.FC = () => {
           </div>
         </div>
       )}
+
+      {showDropboxPicker && (
+        <div className="absolute inset-0 bg-white z-10 overflow-auto">
+          <DropboxPicker
+            onFilesSelected={async (files) => {
+              try {
+                const res = await axios.post('http://localhost:5000/upload_dropbox', { files });
+                if (res.status === 200) {
+                  setUploadedFiles(prev => [...prev, ...files]);
+                  setMessages(prev => [...prev, { sender: 'bot', text: 'Data uploaded successfully from Dropbox.' }]);
+                } else {
+                  setMessages(prev => [...prev, { sender: 'bot', text: 'Failed to upload Dropbox data.' }]);
+                }
+              } catch {
+                setMessages(prev => [...prev, { sender: 'bot', text: 'Dropbox upload failed.' }]);
+              }
+              setShowDropboxPicker(false);
+            }}
+            onClose={() => setShowDropboxPicker(false)}
+          />
+        </div>
+      )}
+
 
       {uploadNotification && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-100 text-green-800 px-4 py-2 rounded-md shadow-md z-10">
