@@ -1,4 +1,5 @@
 import axios from 'axios';
+import React from 'react';
 import { useState, useRef } from 'react';
 import { FaPaperclip, FaMicrophone, FaUserCircle, FaRobot, FaDropbox, FaRegFileAlt } from 'react-icons/fa';
 import { SiNotion } from 'react-icons/si';
@@ -60,92 +61,228 @@ const ChatContentKush: React.FC = () => {
     }
   };
 
+  const parseMarkdown = (text: string) => {
+    text = text.replace("**", "<strong>").replace("**", "</strong>");
+    const lines = text.split('\n');
+  
+    return (
+      <div className="whitespace-pre-wrap space-y-1">
+        {lines.map((line, i) => {
+          // Bullet points
+          if (line.trim().startsWith('* ')) {
+            const content = line.replace(/^\* /, '');
+            return (
+              <div key={i} className="pl-4 list-disc list-inside">
+                • {content}
+              </div>
+            );
+          }
+  
+          // Bold formatting
+          const parts = line.split(/(\*\*[^*]+\*\*)/g).map((segment, idx) => {
+            if (segment.startsWith('**') && segment.endsWith('**')) {
+              return <strong key={idx}>{segment.slice(2, -2)}</strong>;
+            }
+            return <span key={idx}>{segment}</span>;
+          });
+  
+          return <div key={i}>{parts}</div>;
+        })}
+        <TextToSpeechButton text={text} />
+      </div>
+    );
+  };
+  
 
-  // const handleSend = async () => {
-  //   if (!query.trim()) return;
-  
-  //   setMessages(prev => [...prev, { sender: 'user', text: query }]);
-  //   setQuery('');
-  //   setResponse(null);
-  
-  //   try {
-  //     const res = await axios.post('http://localhost:5000/chat', { query });
-  //     const reply = res.data?.response;
-  
-  //     // Example: Dynamically decide whether to show text or a component
-  //     if (reply === 'show_calendar') {
-  //       setMessages(prev => [...prev, { sender: 'bot', text: <CalendarPopup /> }]);
-  //     } else {
-  //       setMessages(prev => [...prev, { sender: 'bot', text: reply || 'No response from backend.' }]);
-  //     }
-  //   } catch (error) {
-  //     setMessages(prev => [...prev, { sender: 'bot', text: 'No response from backend.' }]);
-  //   }
-  // };
 
   const handleSend = async () => {
     if (!query.trim()) return;
-  
+
     setMessages(prev => [...prev, { sender: 'user', text: query }]);
     setQuery('');
-    setResponse(null);
-  
+
     try {
-      // const res = await axios.post('http://localhost:5000/chat', { query });
-      // let reply = res.data?.response;
-      
+      const response = await fetch('/api/agent-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query }),
+      });
 
-      // Example: Dynamically decide whether to show text or a component
-    let  reply = 'summary';
-      if (reply === 'show_calendar') {
-        console.log('show_calendar');
+      if (!response.body) {
+        console.error("No response body");
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let done = false;
+      let accumulatedContent = '';
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+
+        const chunkValue = decoder.decode(value);
+        const events = chunkValue.split("\n\n");
+
+        for (const event of events) {
+          if (!event.startsWith("data: ")) continue;
+          const dataStr = event.replace("data: ", "").trim();
+          if (!dataStr) continue;
+
+          try {
+            const dataObj = JSON.parse(dataStr);
+
+            if (dataObj.function_call) {
+              let spinnerText = '';
+
+              switch (dataObj.function_name) {
+                case 'RouteQuery':
+                  spinnerText = '🔍 Retrieving relevant documents...';
+                  break;
+                case 'GradeDocuments':
+                  spinnerText = '📊 Re-ranking the documents...';
+                  break;
+                default:
+                  spinnerText = `Running ${dataObj.function_name}...`;
+              }
+
+              setMessages(prevMessages => {
+                const last = prevMessages[prevMessages.length - 1];
+
+                // If last message is spinner, update text
+                if (
+                  last &&
+                  last.sender === 'bot' &&
+                  typeof last.text !== 'string' &&
+                  React.isValidElement(last.text) &&
+                  last.text.props?.children?.[1] // spinner text
+                ) {
+                  const updated = [...prevMessages];
+                  updated[updated.length - 1] = {
+                    ...last,
+                    text: (
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <span className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full" />
+                        <span>{spinnerText}</span>
+                      </div>
+                    ),
+                  };
+                  return updated;
+                } else {
+                  // Add new spinner if not already present
+                  return [
+                    ...prevMessages,
+                    {
+                      sender: 'bot',
+                      text: (
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <span className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full" />
+                          <span>{spinnerText}</span>
+                        </div>
+                      ),
+                    },
+                  ];
+                }
+              });
+            } else if (dataObj.tool_call) {
+              setMessages(prev => [...prev, {
+                sender: 'bot',
+                text: <div>
+                  <strong>Tool:</strong> {dataObj.tool_name}
+                </div>
+              }]);
+            } else {
+              accumulatedContent += dataObj.content;
+
+              setMessages(prevMessages => {
+                const updated = [...prevMessages];
+                const last = updated[updated.length - 1];
+              
+                if (last && last.sender === 'bot' && typeof last.text === 'string') {
+                  updated[updated.length - 1] = {
+                    ...last,
+                    text: accumulatedContent,
+                  };
+                } else if (
+                  last &&
+                  last.sender === 'bot' &&
+                  typeof last.text !== 'string' &&
+                  React.isValidElement(last.text)
+                ) {
+                  updated[updated.length - 1] = {
+                    ...last,
+                    text: (
+                      <div>
+                        
+                        <SummaryCard
+                          title="Quick Summary"
+                          content={parseMarkdown(accumulatedContent)}
+                          timestamp={new Date().toLocaleString()}
+                        />
+                      </div>
+                    ),
+                  };
+                } else {
+                  updated.push({
+                    sender: 'bot',
+                    text: (
+                      <div>
+                        {parseMarkdown(accumulatedContent)}
+                        <SummaryCard
+                          title="Quick Summary"
+                          content={parseMarkdown(accumulatedContent)}
+                          timestamp={new Date().toLocaleString()}
+                        />
+                      </div>
+                    ),
+                  });
+                }
+              
+                return updated;
+              });
+              
+              
+              
+              
+            }
+          } catch (err) {
+            console.error("Error parsing stream chunk", err);
+          }
+        }
+      }
+
+      // After streaming ends, check if any special commands were in final response
+      if (accumulatedContent === 'show_calendar') {
         setMessages(prev => [...prev, { sender: 'bot', text: <CalendarPopup /> }]);
-      } else if(reply === "email_composer"){
+      } else if (accumulatedContent === 'email_composer') {
         setMessages(prev => [...prev, { sender: 'bot', text: <EmailComposer /> }]);
+      } else if (accumulatedContent === 'access_denied') {
+        setMessages(prev => [...prev, {
+          sender: 'bot',
+          text: <AccessDeniedCard
+            resource="Employee Handbook"
+            reason="You don't have access rights to view this confidential document."
+            timestamp="April 5, 2025 – 9:42 AM"
+          />
+        }]);
+      } else if (accumulatedContent === 'file_preview') {
+        setMessages(prev => [...prev, {
+          sender: 'bot',
+          text: <FilePreview filename="test.csv" fileSize="10kb" fileType="xlsx" timestamp="April 5, 2025 – 9:42 AM" />
+        }]);
+      } else if (accumulatedContent === 'pdf_preview') {
+        setMessages(prev => [...prev, {
+          sender: 'bot',
+          text: <PDFPreview filename="test.pdf" fileSize="1.2MB" timestamp="April 5, 2025 – 9:42 AM" />
+        }]);
       }
-      else if(reply === 'access_denied') {
-        setMessages(prev => [...prev, { sender: 'bot', text:  <AccessDeniedCard
-          resource="Employee Handbook"
-          reason="You don't have access rights to view this confidential document."
-          timestamp="April 5, 2025 – 9:42 AM"
-        />
-         }]);
-
-      } else if(reply === 'file_preview'){
-        setMessages(prev => [...prev, { sender: 'bot', text: <FilePreview 
-          filename="test.csv"
-          fileSize="10kb"
-          fileType="xlsx"
-          timestamp = "April 5, 2025 – 9:42 AM"
-          /> }]);
-      }
-      else if(reply ==="pdf_preview"){
-        setMessages(prev => [...prev, { sender: 'bot', text: <PDFPreview
-          filename="test.csv"
-          fileSize="10kb"
-          timestamp = "April 5, 2025 – 9:42 AM"
-
-          /> }]);
-      } else if(reply==="summary"){
-        setMessages(prev => [...prev, { sender: 'bot', text: <SummaryCard
-          title="Test 123"
-          content= "Kush is a very good programmer or a pro gamer? decide yourself! 😂"
-          timestamp= "April 5, 2025 – 9:42 AM"
-          /> }]);
-        // setMessages(prev => [...prev, { sender: 'bot', text: <SummaryCard
-        //   title="Test 123"
-        //   content= "Kush is a very good programmer or a pro gamer? decide yourself! 😂"
-        //   timestamp= "April 5, 2025 – 9:42 AM"
-        //   /> }]);
-      }
-      
-      else {
-        setMessages(prev => [...prev, { sender: 'bot', text: reply || 'No response from backend.' }]);
-      }
-    } catch (error) {
-      setMessages(prev => [...prev, { sender: 'bot', text: 'No response from backend.' }]);
+    } catch (err) {
+      console.error("Streaming error:", err);
+      setMessages(prev => [...prev, { sender: 'bot', text: 'Error connecting to backend.' }]);
     }
   };
+
 
   const handleVoiceInput = () => {
     const recognition = new (window.SpeechRecognition || (window as any).webkitSpeechRecognition)();
