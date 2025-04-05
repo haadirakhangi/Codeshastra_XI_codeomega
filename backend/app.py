@@ -1,17 +1,51 @@
 from dotenv import load_dotenv
+import os
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.output_parsers import StrOutputParser
-from typing import Literal, List
+from typing import List
 from typing_extensions import TypedDict
 from langchain_core.prompts import ChatPromptTemplate
-from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from core.ingest import DataLoader
+from core.utils import Utilities
+from flask import (
+    Flask,
+    redirect,
+    request,
+    jsonify,
+    Response,
+    stream_with_context,
+    session,
+)
+from pymongo import MongoClient
+from flask_cors import CORS
+from flask_bcrypt import Bcrypt
+from langgraph.graph import END, StateGraph, START
+from pymongo.server_api import ServerApi
+from urllib.parse import quote_plus
+from bson import ObjectId
+
+from models.data_models import *
 
 load_dotenv()
+
+app = Flask(__name__)
+CORS(app)
+app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(24)
+password = quote_plus(os.getenv("MONGO_PASS"))
+uri = (
+    "mongodb+srv://hatim:"
+    + password
+    + "@cluster0.f7or37n.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true"
+)
+client = MongoClient(uri, server_api=ServerApi("1"))
+mongodb = client["CodeShastra"]
+user_collection = mongodb["users"]
+
+bcrypt = Bcrypt(app)
 RETRIEVER = DataLoader.load_pdf(
     pdf_path=["data/sample.pdf"], emdeddings=GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
 )
@@ -22,45 +56,15 @@ compression_retriever = ContextualCompressionRetriever(
     base_compressor=compressor, base_retriever=RETRIEVER
 )
 
-class RouteQuery(BaseModel):
-    """Route a user query to the most suitable function"""
-
-    datasource: Literal["vectorstore", "answer_directly"] = Field(
-        ...,
-        description="Given a user question decide if the question can be answered directly or requires an external data source. Choose between vectorstore or answer_directly",
-    )
-
-class GradeDocuments(BaseModel):
-    """Binary score for relevance check on retrieved documents."""
-
-    binary_score: str = Field(
-        description="Documents are relevant to the question, 'yes' or 'no'"
-    )
-
-class GradeHallucinations(BaseModel):
-    """Binary score for hallucination present in generation answer."""
-
-    binary_score: str = Field(
-        description="Answer is grounded in the facts, 'yes' or 'no'"
-    )
-
-class GradeAnswer(BaseModel):
-    """Binary score to assess answer addresses question."""
-
-    binary_score: str = Field(
-        description="Answer addresses the question, 'yes' or 'no'"
-    )
-
-
-
 LLM = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 
 # ROUTER
 structured_llm_router = LLM.with_structured_output(RouteQuery)
-router_system_prompt = """You are an expert at routing a user's question. Understand the user query and decide if it requires an external data source or can be answered directly. 
-Accordingly, route the user question to vectorstore or answer_directly.
-The vectorstore contains information about user's private data. 
-Use the vectorstore for questions on these topics. Otherwise, answer-directly."""
+router_system_prompt = """You are an expert at routing a user's question. Understand the user query and decide where to route the user question. 
+Choose one of:
+'vectorstore' : when external data is required to answer the question or user asks in general question.
+'generate_report': Question which involves generating report.
+'write_email': If writing an email is required."""
 route_prompt = ChatPromptTemplate.from_messages(
     [
         ("system", router_system_prompt),
@@ -145,6 +149,172 @@ re_write_prompt = ChatPromptTemplate.from_messages(
 
 question_rewriter = re_write_prompt | LLM | StrOutputParser()
 
+
+
+def retrieve(state):
+    """
+    Retrieve documents
+
+    Args:
+        state (dict): The current graph state
+
+    Returns:
+        state (dict): New key added to state, documents, that contains retrieved documents
+    """
+    print("---RETRIEVE---")
+    question = state["question"]
+
+    # Retrieval
+    documents = compression_retriever.invoke(question)
+    return {"documents": documents, "question": question}
+
+def generate(state):
+    """
+    Generate answer
+
+    Args:
+        state (dict): The current graph state
+
+    Returns:
+        state (dict): New key added to state, generation, that contains LLM generation
+    """
+    print("---GENERATE---")
+    question = state["question"]
+    documents = state["documents"]
+
+    # RAG generation
+    generation = rag_chain.invoke({"context": documents, "question": question})
+    return {"documents": documents, "question": question, "generation": generation}
+
+def grade_documents(state):
+    """
+    Determines whether the retrieved documents are relevant to the question.
+
+    Args:
+        state (dict): The current graph state
+
+    Returns:
+        state (dict): Updates documents key with only filtered relevant documents
+    """
+
+    print("---CHECK DOCUMENT RELEVANCE TO QUESTION---")
+    question = state["question"]
+    documents = state["documents"]
+
+    # Score each doc
+    filtered_docs = []
+    for d in documents:
+        score = retrieval_grader.invoke(
+            {"question": question, "document": d.page_content}
+        )
+        grade = score.binary_score
+        if grade == "yes":
+            print("---GRADE: DOCUMENT RELEVANT---")
+            filtered_docs.append(d)
+        else:
+            print("---GRADE: DOCUMENT NOT RELEVANT---")
+            continue
+    return {"documents": filtered_docs, "question": question}
+
+
+def transform_query(state):
+    """
+    Transform the query to produce a better question.
+
+    Args:
+        state (dict): The current graph state
+
+    Returns:
+        state (dict): Updates question key with a re-phrased question
+    """
+
+    print("---TRANSFORM QUERY---")
+    question = state["question"]
+    documents = state["documents"]
+
+    # Re-write question
+    better_question = question_rewriter.invoke({"question": question})
+    return {"documents": documents, "question": better_question}
+
+def classify_user_query(state):
+    """
+    Classify user query
+
+    Args:
+        state (dict): The current graph state
+
+    Returns:
+        state (dict): Updates documents key with appended web results
+    """
+
+    print("---ANSWER DIRECTLY---")
+    question = state["question"]
+    
+    response = question_router.invoke({"question":question})
+
+    return {"question_type": response.route, "question": question}
+
+def decide_to_generate(state):
+    """
+    Determines whether to generate an answer, or re-generate a question.
+
+    Args:
+        state (dict): The current graph state
+
+    Returns:
+        str: Binary decision for next node to call
+    """
+
+    print("---ASSESS GRADED DOCUMENTS---")
+    state["question"]
+    filtered_documents = state["documents"]
+
+    if not filtered_documents:
+        print(
+            "---DECISION: ALL DOCUMENTS ARE NOT RELEVANT TO QUESTION, TRANSFORM QUERY---"
+        )
+        return "transform_query"
+    else:
+        # We have relevant documents, so generate answer
+        print("---DECISION: GENERATE---")
+        return "generate"
+
+def grade_generation_v_documents_and_question(state):
+    """
+    Determines whether the generation is grounded in the document and answers question.
+
+    Args:
+        state (dict): The current graph state
+
+    Returns:
+        str: Decision for next node to call
+    """
+
+    print("---CHECK HALLUCINATIONS---")
+    question = state["question"]
+    documents = state["documents"]
+    generation = state["generation"]
+
+    score = hallucination_grader.invoke(
+        {"documents": documents, "generation": generation}
+    )
+    grade = score.binary_score
+
+    if grade == "yes":
+        print("---DECISION: GENERATION IS GROUNDED IN DOCUMENTS---")
+        print("---GRADE GENERATION vs QUESTION---")
+        score = answer_grader.invoke({"question": question, "generation": generation})
+        grade = score.binary_score
+        if grade == "yes":
+            print("---DECISION: GENERATION ADDRESSES QUESTION---")
+            return "useful"
+        else:
+            print("---DECISION: GENERATION DOES NOT ADDRESS QUESTION---")
+            return "not useful"
+    else:
+        print("---DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS, RE-TRY---")
+        return "not supported"
+
 class GraphState(TypedDict):
     """
     Represents the state of our graph.
@@ -153,9 +323,100 @@ class GraphState(TypedDict):
         question: question
         generation: LLM generation
         documents: list of documents
+        question_type: type of question
     """
 
     question: str
     generation: str
     documents: List[str]
+    question_type : str
 
+
+workflow = StateGraph(GraphState)
+
+# Define the nodes
+workflow.add_node("classify_user_query", classify_user_query) 
+workflow.add_node("retrieve", retrieve)  # retrieve
+workflow.add_node("grade_documents", grade_documents)  # grade documents
+workflow.add_node("generate", generate)  # generatae
+workflow.add_node("transform_query", transform_query)  # transform_query
+
+# Build graph
+workflow.add_edge(START, "classify_user_query")
+workflow.add_edge("classify_user_query", "retrieve")
+workflow.add_edge("retrieve", "grade_documents")
+workflow.add_edge("transform_query", "retrieve")
+workflow.add_conditional_edges(
+    "grade_documents",
+    decide_to_generate,
+    {
+        "transform_query": "transform_query",
+        "generate": "generate",
+    },
+)
+workflow.add_edge("generate",END)
+
+# Compile
+RAG = workflow.compile()
+
+
+@app.route("/register", methods=["POST"])
+def register():
+    data = request.get_json()
+    username = data.get("username")
+    email = data.get("email")
+    password = data.get("password")
+
+    if not username or not email or not password:
+        return jsonify({"error": "Username, email, and password are required"}), 400
+    if user_collection.find_one({"username": username}):
+        return jsonify({"error": "Username already exists"}), 400
+
+    hashed_password = bcrypt.generate_password_hash(password).decode("utf-8")
+    user_data = {"username": username, "email": email, "password": hashed_password}
+
+    result = user_collection.insert_one(user_data)
+
+    return (
+        jsonify(
+            {
+                "message": "User registered successfully",
+                "user_id": str(result.inserted_id),
+            }
+        ),
+        200,
+    )
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
+
+    user_data = user_collection.find_one({"username": username})
+
+    if user_data and bcrypt.check_password_hash(user_data["password"], password):
+        session["user_id"] = str(user_data["_id"])  # Store user ID in session
+        return jsonify({"message": "Login successful"}), 200
+    else:
+        return jsonify({"error": "Invalid username or password"}), 401
+    
+@app.route("/agent-chat", methods=["POST"])
+def agent_chat():
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    data: dict = request.get_json()
+    user_message = data["message"]
+    if not user_message:
+        return "No message provided", 400
+    user_id = session["user_id"]
+    print(f"User ID: {user_id}")
+    user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
+    if not user_data:
+        return "User not found", 404
+    username = user_data["username"]
+    inputs = {"messages": [{"role": "user", "content": user_message}]}
+    config = {"configurable": {"user_id": user_id, "thread_id": "2"}}
+    response = RAG.invoke(inputs, config=config)
+    print(f"Response: {response}")
+    return jsonify({"response": str(response)}), 200

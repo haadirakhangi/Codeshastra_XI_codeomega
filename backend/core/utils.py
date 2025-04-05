@@ -3,7 +3,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-class MultiAgentSystem:
+class Utilities:
 
     @staticmethod
     def retrieve(state, compression_retriever):
@@ -54,18 +54,23 @@ class MultiAgentSystem:
         web_results = Document(page_content=web_results)
         return {"documents": web_results, "question": question}
 
-    @staticmethod
-    def answer_directly(state):
+    def classify_user_query(state, question_router):
+        """
+        Classify user query
+
+        Args:
+            state (dict): The current graph state
+
+        Returns:
+            state (dict): Updates documents key with appended web results
+        """
+
         print("---ANSWER DIRECTLY---")
         question = state["question"]
-        llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", 'Helpful AI agent'),
-            ("human", "{question}"),
-        ])
-        chain = prompt | llm | StrOutputParser()
-        response = chain.invoke({"question": question})
-        return {"generation": response, "question": question}
+        
+        response = question_router.invoke({"question":question})
+
+        return {"question_type": response.route, "question": question}
 
     @staticmethod
     def route_question(state, question_router):
