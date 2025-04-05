@@ -1,5 +1,14 @@
 from pydantic import BaseModel, Field
-from typing import Literal
+from typing import Literal, List
+
+class Policy(BaseModel):
+    """Based on the policy, determine which types of users have access to this"""
+
+    access: List[Literal["admin", "manager", "intern"]] = Field(
+        ...,
+        description="List of user types who are allowed to access the document",
+    )
+
 
 class RouteQuery(BaseModel):
     """Route a user query to the most suitable function"""
