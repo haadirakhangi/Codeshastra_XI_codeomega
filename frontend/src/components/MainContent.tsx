@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { initGapiClient, signInAndPickFiles } from '../utils/gdrive';
 import DataSourceModal from './DataSourceModal';
 import GDrivePicker from './GdrivePicker';
 
