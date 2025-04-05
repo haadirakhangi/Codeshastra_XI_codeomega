@@ -20,6 +20,7 @@ from flask import (
     stream_with_context,
     session,
 )
+import json
 from pymongo import MongoClient
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
@@ -27,6 +28,7 @@ from langgraph.graph import END, StateGraph, START
 from pymongo.server_api import ServerApi
 from urllib.parse import quote_plus
 from bson import ObjectId
+from werkzeug.utils import secure_filename
 
 from models.data_models import *
 
@@ -361,6 +363,12 @@ workflow.add_edge("generate",END)
 # Compile
 RAG = workflow.compile()
 
+UPLOAD_FOLDER = 'uploads'
+FILE_LIST_PATH = 'uploaded_files.json'
+ALLOWED_EXTENSIONS = {'pdf', 'txt', 'jpg', 'jpeg', 'png'}
+
+# Make sure the upload folder exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route("/register", methods=["POST"])
 def register():
@@ -422,6 +430,58 @@ def agent_chat():
     response = RAG.invoke(inputs, config=config)
     print(f"Response: {response}")
     return jsonify({"response": str(response)}), 200
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def classify_file_type(filename):
+    ext = filename.rsplit('.', 1)[1].lower()
+    if ext == 'pdf':
+        return 'pdf'
+    elif ext == 'csv':
+        return 'csv'
+    elif ext in ['jpg', 'jpeg', 'png']:
+        return 'image'
+    return None  # Ignore other types
+
+@app.route('/api/upload-docs', methods=['POST'])
+def upload_docs():
+    # user_id = session.get('user_id')  # You can still use this for folder structuring
+    user_id= '1923791268182'
+    if not user_id:
+        return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+
+    if 'files' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+
+    files = request.files.getlist('files')
+    saved_files = []
+    pdfs = []
+    csv  = []
+    image = []
+    for file in files:
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file_type = classify_file_type(filename)
+
+            if not file_type:
+                continue
+
+            # Maintain folder structure: uploads/<user_id>/<text|image>/
+            folder_type = 'text' if file_type in ['pdf', 'csv'] else 'image'
+            user_folder = os.path.join(UPLOAD_FOLDER, str(user_id), folder_type)
+            os.makedirs(user_folder, exist_ok=True)
+
+            file_path = os.path.join(user_folder, filename)
+            file.save(file_path)
+            saved_files.append(file_path)
+
+            # Append to global list
+            file_type.append(file_path)
+
+    return jsonify({'message': f'{len(saved_files)} file(s) uploaded successfully.'})
+
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

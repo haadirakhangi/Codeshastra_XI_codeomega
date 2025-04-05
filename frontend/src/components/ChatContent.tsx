@@ -91,7 +91,7 @@ const ChatContent: React.FC = () => {
     Array.from(files).forEach((file) => formData.append('files', file));
 
     try {
-      const res = await axios.post('/api/upload', formData, {
+      const res = await axios.post('/api/upload-docs', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
