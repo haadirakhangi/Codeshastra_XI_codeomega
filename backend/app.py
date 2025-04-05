@@ -46,17 +46,11 @@ mongodb = client["CodeShastra"]
 user_collection = mongodb["users"]
 
 bcrypt = Bcrypt(app)
-RETRIEVER = DataLoader.load_pdf(
-    pdf_path=["data/sample.pdf"], emdeddings=GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-)
-EMBEDDINGS = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-RERANKER_MODEL = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")
-compressor = CrossEncoderReranker(model=RERANKER_MODEL, top_n=5)
-compression_retriever = ContextualCompressionRetriever(
-    base_compressor=compressor, base_retriever=RETRIEVER
-)
+
 
 LLM = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
+EMBEDDINGS = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+
 
 # ROUTER
 structured_llm_router = LLM.with_structured_output(RouteQuery)
@@ -163,6 +157,14 @@ def retrieve(state):
     """
     print("---RETRIEVE---")
     question = state["question"]
+    RETRIEVER = DataLoader.load_pdf(
+        pdf_path=["data/sample.pdf"], emdeddings=GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+    )
+    RERANKER_MODEL = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")
+    compressor = CrossEncoderReranker(model=RERANKER_MODEL, top_n=5)
+    compression_retriever = ContextualCompressionRetriever(
+        base_compressor=compressor, base_retriever=RETRIEVER
+)
 
     # Retrieval
     documents = compression_retriever.invoke(question)
@@ -420,3 +422,6 @@ def agent_chat():
     response = RAG.invoke(inputs, config=config)
     print(f"Response: {response}")
     return jsonify({"response": str(response)}), 200
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
