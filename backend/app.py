@@ -13,6 +13,7 @@ from core.ingest import DataLoader
 from core.utils import Utilities
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
+from langchain_openai import OpenAIEmbeddings
 import faiss
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from flask import (
@@ -163,17 +164,18 @@ def retrieve(state):
     question = state["question"]
     dept = state["department"]
     access = state["access"]
-    RETRIEVER = DataLoader.load_pdf(
-        pdf_path=["data/sample.pdf"], emdeddings=GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-    )
+    user_id = session["user_id"]
+    faiss_index_path = os.path.join(UPLOAD_FOLDER, str(user_id), "text",'faiss_index', 'index.faiss')
+    print(f"FAISS index path: {faiss_index_path}")
+    vectorstore = FAISS.load_local(faiss_index_path, embeddings=EMBEDDINGS, allow_dangerous_deserialization=True)
     RERANKER_MODEL = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")
     compressor = CrossEncoderReranker(model=RERANKER_MODEL, top_n=5)
     compression_retriever = ContextualCompressionRetriever(
-        base_compressor=compressor, base_retriever=RETRIEVER
-)
+        base_compressor=compressor, base_retriever=vectorstore.as_retriever()
+    )
 
     # Retrieval
-    documents = compression_retriever.invoke(question, search_kwargs={'filter': {"access":access, "dept":dept}, 'k': 5})
+    documents = compression_retriever.invoke(question, config={'metadata': {"access":access, "dept":dept}})
     return {"documents": documents, "question": question}
 
 def generate(state):
@@ -437,7 +439,7 @@ def agent_chat():
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
     user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
     data: dict = request.get_json()
-    user_message = data["message"]
+    user_message = data["query"]
     if not user_message:
         return "No message provided", 400
     user_id = session["user_id"]
@@ -445,8 +447,7 @@ def agent_chat():
     user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
     if not user_data:
         return "User not found", 404
-    username = user_data["username"]
-    inputs = {"messages": [{"role": "user", "content": user_message}],"department": user_data["department"], "access": user_data["role"]}
+    inputs = {"question": [{"role": "user", "content": user_message}],"department": user_data["department"], "access": user_data["role"]}
     config = {"configurable": {"user_id": user_id, "thread_id": "2"}}
     response = RAG.invoke(inputs, config=config)
     print(f"Response: {response}")
