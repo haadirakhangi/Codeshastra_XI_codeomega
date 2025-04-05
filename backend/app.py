@@ -528,6 +528,7 @@ def upload_docs():
 
         response = policy_agent.invoke({"context":context})
         metadata = response.access
+        print("metadata", metadata)
         for doc in docs:
             all_docs_with_metadata.append(Document(page_content=doc.page_content, metadata={"access": metadata, "dept":department}))
     faiss_folder = os.path.join(UPLOAD_FOLDER, str(user_id), "text",'faiss_index')
