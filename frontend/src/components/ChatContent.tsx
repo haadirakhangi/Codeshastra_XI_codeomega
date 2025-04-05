@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import DataSourceModal from './DataSourceModal';
 import GDrivePicker from './GdrivePicker';
 
-const MainContent: React.FC = () => {
+const ChatContent: React.FC = () => {
   const [query, setQuery] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [response, setResponse] = useState<string | null>(null);
@@ -108,33 +108,6 @@ const MainContent: React.FC = () => {
           />
         </div>
       )}
-
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <div className="relative w-full max-w-lg">
-          <input
-            type="text"
-            placeholder="Search knowledge base..."
-            className="w-full py-2 px-4 pl-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <div className="absolute left-3 top-2.5 text-gray-400">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </div>
-        </div>
-        <div className="flex items-center">
-          <button className="ml-2 p-2 hover:bg-gray-100 rounded-md">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405..." />
-            </svg>
-          </button>
-          <button className="ml-2 p-2 bg-blue-600 text-white rounded-md">Log in</button>
-        </div>
-      </div>
 
       {!submitted ? (
         <div className="flex-1 p-6 overflow-auto">
@@ -260,4 +233,4 @@ const MainContent: React.FC = () => {
   );
 };
 
-export default MainContent;
+export default ChatContent;
