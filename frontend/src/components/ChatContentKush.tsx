@@ -97,176 +97,181 @@ const ChatContentKush: React.FC = () => {
 
   const handleSend = async () => {
     if (!query.trim()) return;
-
+  
     setMessages(prev => [...prev, { sender: 'user', text: query }]);
     setQuery('');
-
+  
     try {
       const response = await fetch('/api/agent-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: query }),
       });
-
+  
       if (!response.body) {
         console.error("No response body");
         return;
       }
-
+  
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let done = false;
       let accumulatedContent = '';
-
+  
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
-
+  
         const chunkValue = decoder.decode(value);
         const events = chunkValue.split("\n\n");
-
+  
         for (const event of events) {
           if (!event.startsWith("data: ")) continue;
           const dataStr = event.replace("data: ", "").trim();
           if (!dataStr) continue;
-
+  
           try {
             const dataObj = JSON.parse(dataStr);
-
-            if (dataObj.function_call) {
-              let spinnerText = '';
-
-              switch (dataObj.function_name) {
-                case 'RouteQuery':
-                  spinnerText = '🔍 Retrieving relevant documents...';
-                  break;
-                case 'GradeDocuments':
-                  spinnerText = '📊 Re-ranking the documents...';
-                  break;
-                default:
-                  spinnerText = `Running ${dataObj.function_name}...`;
-              }
-
-              setMessages(prevMessages => {
-                const last = prevMessages[prevMessages.length - 1];
-
-                // If last message is spinner, update text
-                if (
-                  last &&
-                  last.sender === 'bot' &&
-                  typeof last.text !== 'string' &&
-                  React.isValidElement(last.text) &&
-                  last.text.props?.children?.[1] // spinner text
-                ) {
-                  const updated = [...prevMessages];
-                  updated[updated.length - 1] = {
-                    ...last,
-                    text: (
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <span className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full" />
-                        <span>{spinnerText}</span>
-                      </div>
-                    ),
-                  };
-                  return updated;
-                } else {
-                  // Add new spinner if not already present
-                  return [
-                    ...prevMessages,
-                    {
-                      sender: 'bot',
+  
+            if (dataObj.payload_type === 'values' && dataObj.error) {
+              // 🔴 Handle error
+              const errorMessage = dataObj.error;
+              setMessages(prev => [...prev, {
+                sender: 'bot',
+                text: <AccessDeniedCard
+                  resource="PDF ACCESS DENIED!!"
+                  reason={errorMessage}
+                  timestamp={new Date().toLocaleString()}
+                />
+              }]);
+              return; // Stop further processing
+            }
+  
+            if (dataObj.payload_type === 'message') {
+              const {
+                content,
+                function_call,
+                function_name,
+                tool_call,
+                tool_name
+              } = dataObj;
+  
+              if (function_call) {
+                let spinnerText = '';
+                switch (function_name) {
+                  case 'RouteQuery':
+                    spinnerText = '🔍 Retrieving relevant documents...';
+                    break;
+                  case 'GradeDocuments':
+                    spinnerText = '📊 Re-ranking the documents...';
+                    break;
+                  default:
+                    spinnerText = `Running ${function_name}...`;
+                }
+  
+                setMessages(prevMessages => {
+                  const last = prevMessages[prevMessages.length - 1];
+  
+                  if (
+                    last &&
+                    last.sender === 'bot' &&
+                    typeof last.text !== 'string' &&
+                    React.isValidElement(last.text)
+                  ) {
+                    const updated = [...prevMessages];
+                    updated[updated.length - 1] = {
+                      ...last,
                       text: (
                         <div className="flex items-center gap-2 text-gray-600">
                           <span className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full" />
                           <span>{spinnerText}</span>
                         </div>
                       ),
-                    },
-                  ];
-                }
-              });
-            } else if (dataObj.tool_call) {
-              setMessages(prev => [...prev, {
-                sender: 'bot',
-                text: <div>
-                  <strong>Tool:</strong> {dataObj.tool_name}
-                </div>
-              }]);
-            } else {
-              accumulatedContent += dataObj.content;
-
-              setMessages(prevMessages => {
-                const updated = [...prevMessages];
-                const last = updated[updated.length - 1];
-              
-                if (last && last.sender === 'bot' && typeof last.text === 'string') {
-                  updated[updated.length - 1] = {
-                    ...last,
-                    text: accumulatedContent,
-                  };
-                } else if (
-                  last &&
-                  last.sender === 'bot' &&
-                  typeof last.text !== 'string' &&
-                  React.isValidElement(last.text)
-                ) {
-                  updated[updated.length - 1] = {
-                    ...last,
-                    text: (
-                      <div>
-                        
-                        <SummaryCard
-                          title="Quick Summary"
-                          content={parseMarkdown(accumulatedContent)}
-                          timestamp={new Date().toLocaleString()}
-                        />
-                      </div>
-                    ),
-                  };
-                } else {
-                  updated.push({
-                    sender: 'bot',
-                    text: (
-                      <div>
-                        {parseMarkdown(accumulatedContent)}
-                        <SummaryCard
-                          title="Quick Summary"
-                          content={parseMarkdown(accumulatedContent)}
-                          timestamp={new Date().toLocaleString()}
-                        />
-                      </div>
-                    ),
-                  });
-                }
-              
-                return updated;
-              });
-              
-              
-              
-              
+                    };
+                    return updated;
+                  } else {
+                    return [
+                      ...prevMessages,
+                      {
+                        sender: 'bot',
+                        text: (
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <span className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full" />
+                            <span>{spinnerText}</span>
+                          </div>
+                        ),
+                      },
+                    ];
+                  }
+                });
+              } else if (tool_call) {
+                setMessages(prev => [...prev, {
+                  sender: 'bot',
+                  text: <div><strong>Tool:</strong> {tool_name}</div>
+                }]);
+              } else if (content) {
+                accumulatedContent += content;
+  
+                setMessages(prevMessages => {
+                  const updated = [...prevMessages];
+                  const last = updated[updated.length - 1];
+  
+                  if (last && last.sender === 'bot' && typeof last.text === 'string') {
+                    updated[updated.length - 1] = {
+                      ...last,
+                      text: accumulatedContent,
+                    };
+                  } else if (
+                    last &&
+                    last.sender === 'bot' &&
+                    typeof last.text !== 'string' &&
+                    React.isValidElement(last.text)
+                  ) {
+                    updated[updated.length - 1] = {
+                      ...last,
+                      text: (
+                        <div>
+                          <SummaryCard
+                            title="Quick Summary"
+                            content={parseMarkdown(accumulatedContent)}
+                            timestamp={new Date().toLocaleString()}
+                          />
+                        </div>
+                      ),
+                    };
+                  } else {
+                    updated.push({
+                      sender: 'bot',
+                      text: (
+                        <div>
+                          {parseMarkdown(accumulatedContent)}
+                          <SummaryCard
+                            title="Quick Summary"
+                            content={parseMarkdown(accumulatedContent)}
+                            timestamp={new Date().toLocaleString()}
+                          />
+                        </div>
+                      ),
+                    });
+                  }
+  
+                  return updated;
+                });
+              }
             }
+  
           } catch (err) {
             console.error("Error parsing stream chunk", err);
           }
         }
       }
-
-      // After streaming ends, check if any special commands were in final response
+  
+      // Final response fallback logic
       if (accumulatedContent === 'show_calendar') {
         setMessages(prev => [...prev, { sender: 'bot', text: <CalendarPopup /> }]);
       } else if (accumulatedContent === 'email_composer') {
         setMessages(prev => [...prev, { sender: 'bot', text: <EmailComposer /> }]);
-      } else if (accumulatedContent === 'access_denied') {
-        setMessages(prev => [...prev, {
-          sender: 'bot',
-          text: <AccessDeniedCard
-            resource="Employee Handbook"
-            reason="You don't have access rights to view this confidential document."
-            timestamp="April 5, 2025 – 9:42 AM"
-          />
-        }]);
-      } else if (accumulatedContent === 'file_preview') {
+      }else if (accumulatedContent === 'file_preview') {
         setMessages(prev => [...prev, {
           sender: 'bot',
           text: <FilePreview filename="test.csv" fileSize="10kb" fileType="xlsx" timestamp="April 5, 2025 – 9:42 AM" />
@@ -282,6 +287,7 @@ const ChatContentKush: React.FC = () => {
       setMessages(prev => [...prev, { sender: 'bot', text: 'Error connecting to backend.' }]);
     }
   };
+  
 
 
   const handleVoiceInput = () => {
@@ -327,6 +333,17 @@ const ChatContentKush: React.FC = () => {
     }
   };
 
+  const downloadFile = async (fileId: string, accessToken: string) => {
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    const blob = await res.blob();
+    return blob;
+  };
+  
+
 
   return (
     <main className="flex-1 flex flex-col h-screen relative bg-gray-50">
@@ -358,28 +375,16 @@ const ChatContentKush: React.FC = () => {
         <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm z-30 flex items-center justify-center">
           <div className="bg-white rounded-xl p-6 shadow-lg max-w-md w-full">
             <GDrivePicker
-              onFilesSelected={async (files) => {
-                try {
-                  const res = await axios.post('/api/upload_gdrive', { files });
-                  if (res.status === 200) {
-                    setUploadedFiles(prev => [...prev, ...files]);
-                    setMessages(prev => [
-                      ...prev,
-                      { sender: 'bot', text: `Data uploaded successfully from Google Drive.` }
-                    ]);
-                  } else {
-                    setMessages(prev => [
-                      ...prev,
-                      { sender: 'bot', text: `Failed to upload data from Google Drive.` }
-                    ]);
-                  }
-                } catch {
-                  setMessages(prev => [
-                    ...prev,
-                    { sender: 'bot', text: `Failed to upload data from Google Drive.` }
-                  ]);
+              onFilesSelected={async (selectedFiles,accessToken) => {
+                const formData = new FormData();
+                for (const file of selectedFiles) {
+                  const blob = await downloadFile(file.id, accessToken);
+                  formData.append('files', blob);
                 }
-                setShowGDrivePicker(false);
+              
+                await axios.post('/api/upload-docs', formData, {
+                  headers: { 'Content-Type': 'multipart/form-data' },
+                });
               }}
             />
           </div>
@@ -391,7 +396,7 @@ const ChatContentKush: React.FC = () => {
           <DropboxPicker
             onFilesSelected={async (files) => {
               try {
-                const res = await axios.post('http://localhost:5000/upload_dropbox', { files });
+                const res = await axios.post('/api/upload-docs', { files });
                 if (res.status === 200) {
                   setUploadedFiles(prev => [...prev, ...files]);
                   setMessages(prev => [...prev, { sender: 'bot', text: 'Data uploaded successfully from Dropbox.' }]);

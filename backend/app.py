@@ -33,6 +33,7 @@ from pymongo.server_api import ServerApi
 from urllib.parse import quote_plus
 from bson import ObjectId
 from werkzeug.utils import secure_filename
+import base64
 
 from models.data_models import *
 
@@ -612,12 +613,10 @@ def upload_docs():
             elif file_type in ['jpg', 'jpeg', 'png']:
                 image.append(file_path)
     all_docs_with_metadata=[]
-    client = genai.Client(api_key="YOUR_API_KEY")
-
-    import base64
-    def encode_image_base64(image_path):
-        with open(image_path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode("utf-8")
+    # client = genai.Client(api_key="YOUR_API_KEY")
+    # def encode_image_base64(image_path):
+    #     with open(image_path, "rb") as image_file:
+    #         return base64.b64encode(image_file.read()).decode("utf-8")
 
     # base_list = []
     # for image_path in image:
