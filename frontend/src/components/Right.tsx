@@ -1,13 +1,40 @@
+// components/RightPanel.tsx
+import React, { useEffect, useState } from 'react';
 
-// Right Panel Component (components/RightPanel.tsx)
-import React from 'react';
+const fallbackData = {
+  queryStatus: "Successful",
+  vectorChunks: 12,
+  reranked: 3,
+  responseTime: "1.2 seconds"
+};
 
 const RightPanel: React.FC = () => {
+  const [visible, setVisible] = useState(true);
+  const [data, setData] = useState(fallbackData);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch('/api/context-data'); // Replace with your backend API
+        if (!res.ok) throw new Error('Network error');
+        const result = await res.json();
+        setData(result);
+      } catch (err) {
+        console.warn("Falling back to static data:", err);
+        setData(fallbackData);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  if (!visible) return null;
+
   return (
     <aside className="w-80 border-l border-gray-200 flex flex-col">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
         <h2 className="text-lg font-medium">Context & Sources</h2>
-        <button>
+        <button onClick={() => setVisible(false)}>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
           </svg>
@@ -20,19 +47,19 @@ const RightPanel: React.FC = () => {
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-sm">Query Understanding</span>
-              <span className="text-sm text-green-600">Successful</span>
+              <span className="text-sm text-green-600">{data.queryStatus}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm">Vector Search</span>
-              <span className="text-sm">12 chunks found</span>
+              <span className="text-sm">{data.vectorChunks} chunks found</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm">Reranking</span>
-              <span className="text-sm">Top 3 selected</span>
+              <span className="text-sm">Top {data.reranked} selected</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm">Response Time</span>
-              <span className="text-sm">1.2 seconds</span>
+              <span className="text-sm">{data.responseTime}</span>
             </div>
           </div>
         </div>
@@ -58,4 +85,3 @@ const RightPanel: React.FC = () => {
 };
 
 export default RightPanel;
-
