@@ -23,6 +23,7 @@ from flask import (
     Response,
     stream_with_context,
     session,
+    send_from_directory,
 )
 import json
 from pymongo import MongoClient
@@ -34,6 +35,7 @@ from urllib.parse import quote_plus
 from bson import ObjectId
 from werkzeug.utils import secure_filename
 import base64
+from datetime import datetime
 
 from models.data_models import *
 
@@ -109,21 +111,6 @@ grade_prompt = ChatPromptTemplate.from_messages(
 )
 
 retrieval_grader = grade_prompt | structured_llm_grader
-
-
-# GENERATION
-generation_system_prompt = "Generate a detailed report based on the user's request using the information provided to you"
-generation_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", generation_system_prompt),
-        ("human", "Set of facts: \n\n {context} \n\n User question: {question}"),
-    ]
-)
-
-def format_docs(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
-
-rag_chain = generation_prompt | LLM | StrOutputParser()
 
 question = "Generate a report on adversarial attacks on llm"
 structured_llm_checker = LLM.with_structured_output(GradeHallucinations)
@@ -214,6 +201,57 @@ def generate(state):
     print("---GENERATE---")
     question = state["question"]
     documents = state["documents"]
+    prompt_type = state["question_type"]
+    generate_report_prompt = """
+You are a senior data analyst. Your job is to generate a clear, well-structured analytical report based on the information provided.
+
+The report should be written in **Markdown format** and cover all relevant aspects based on the context and the user's question.
+
+---
+
+## 🧾 Report Requirements:
+
+1. **Executive Summary**  
+   - Start with a brief summary of the key findings or insights.
+   
+2. **Direct Answer to the User’s Question**  
+   - Provide a focused and data-supported answer.
+
+3. **Key Metrics and Highlights**  
+   - Present relevant quantitative or qualitative metrics depending on the context (e.g., revenue, conversions, sentiment scores, traffic volume, etc.).
+   - Use bullet points.
+
+4. **Trends, Patterns, and Anomalies**  
+   - Highlight any noticeable changes or patterns over time or across segments.
+
+5. **Performance Drivers or Root Causes**  
+   - Explain any underlying factors influencing the outcomes.
+
+6. **Recommendations**  
+   - Include actionable insights or strategic suggestions where applicable.
+
+7. **Professional Formatting**  
+   - Use Markdown elements such as:
+     - Headings (##, ###)
+     - Lists
+     - Bold for emphasis
+"""
+    if prompt_type == "generate_report":
+        print("GENERATING REPORT...")
+        generation_system_prompt = generate_report_prompt
+    else:
+        generation_system_prompt = "You're an AI assistant for Sentra Vault. Answer the user question based on the context provided.\n\n"
+    generation_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", generation_system_prompt),
+            ("human", "SALES DATA / CONTEXT:\n{context}: \n\n USER QUESTION: {question}"),
+        ]
+    )
+
+    # def format_docs(docs):
+    #     return "\n\n".join(doc.page_content for doc in docs)
+
+    rag_chain = generation_prompt | LLM | StrOutputParser()
 
     # RAG generation
     generation = rag_chain.invoke({"context": documents, "question": question})
@@ -421,7 +459,7 @@ RAG = workflow.compile()
 
 UPLOAD_FOLDER = 'uploads'
 FILE_LIST_PATH = 'uploaded_files.json'
-ALLOWED_EXTENSIONS = {'pdf', 'txt', 'jpg', 'jpeg', 'png'}
+ALLOWED_EXTENSIONS = {'pdf', 'txt', 'jpg', 'jpeg', 'png', 'csv'}
 
 # Make sure the upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -579,14 +617,14 @@ def upload_docs():
 
     if not user_id:
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
-
+    print(request.files)
     if 'files' not in request.files:
         return jsonify({'error': 'No file part'}), 400
 
     files = request.files.getlist('files')
     saved_files = []
     pdfs = []
-    csv  = []
+    csvs  = []
     image = []
     for file in files:
         if file and allowed_file(file.filename):
@@ -609,9 +647,10 @@ def upload_docs():
             if file_type == 'pdf':
                 pdfs.append(file_path)
             elif file_type == 'csv':
-                csv.append(file_path)
+                csvs.append(file_path)
             elif file_type in ['jpg', 'jpeg', 'png']:
                 image.append(file_path)
+    print("CSV FILES UPLOADED\n\n",csvs)
     all_docs_with_metadata=[]
     # client = genai.Client(api_key="YOUR_API_KEY")
     # def encode_image_base64(image_path):
@@ -655,6 +694,28 @@ def upload_docs():
         # print("metadata", metadata)
         for doc in docs:
             all_docs_with_metadata.append(Document(page_content=doc.page_content, metadata={"access": metadata, "dept":department}))
+    for csv in csvs:
+        system_prompt= """You have to determine who has access to this document based on the following instruction. The types of users are: intern, manager and admin. 
+        - Legal documents should not be made available to interns
+        - Financial documents should not be made available to manager and intern 
+        - Admin has access to all the documents
+
+        Respond with a list of user types who are allowed to access the document.""" 
+        context,docs = DataLoader.load_csv(csv)
+        policy_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system_prompt),
+                ("human", "{context}"),
+            ]
+        )
+        llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash')
+        policy_agent = policy_prompt | llm.with_structured_output(Policy)
+
+        response = policy_agent.invoke({"context":context})
+        metadata = response.access
+        # print("metadata", metadata)
+        for doc in docs:
+            all_docs_with_metadata.append(Document(page_content=doc.page_content, metadata={"access": metadata, "dept":department}))
     faiss_folder = os.path.join(UPLOAD_FOLDER, str(user_id), "text",'faiss_index')
     os.makedirs(faiss_folder, exist_ok=True)
     faiss_index_path = os.path.join(faiss_folder, 'index.faiss')
@@ -677,6 +738,68 @@ def upload_docs():
     return jsonify({'message': f'{len(saved_files)} file(s) uploaded successfully.'}),200
 
 
+@app.route('/upload', methods=['POST'])
+def upload_files():
+    print(request.files)
+    if 'documents' not in request.files:
+        return jsonify({'error': 'No files part in the request'}), 400
+
+    files = request.files.getlist('documents')
+    saved_files = []
+
+    for file in files:
+        if file.filename == '':
+            continue
+        filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}-{secure_filename(file.filename)}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        saved_files.append(filename)
+
+    return jsonify({
+        'message': 'Files uploaded successfully!',
+        'files': saved_files
+    }), 200
+
+
+
+@app.route('/files', methods=['GET'])
+def get_user_files():
+    user_id = session.get('user_id')  # You can still use this for folder structuring
+    if not user_id:
+        return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+    user_dir = os.path.join('./uploads', user_id, 'text')
+    
+    if not os.path.exists(user_dir):
+        return jsonify({"message": "No files found for this user."}), 404
+
+    files = []
+    for filename in os.listdir(user_dir):
+        file_path = os.path.join(user_dir, filename)
+        if os.path.isfile(file_path):
+            files.append({
+                "filename": filename,
+                "path": f"uploads/{user_id}/text/{filename}"
+            })
+
+    return jsonify({
+        "user_id": user_id,
+        "files": files
+    })
+
+
+
+@app.route('/uploads/<user_id>/text/<filename>', methods=['GET'])
+def serve_uploaded_file(user_id, filename):
+ # You can still use this for folder structuring
+    print(f"Current user ID: {user_id}")
+  
+
+    file_path = os.path.join("uploads", user_id, "text")
+
+    print(f"File path: {file_path}")
+    return send_from_directory(file_path, filename, as_attachment=False)
+   
+     
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

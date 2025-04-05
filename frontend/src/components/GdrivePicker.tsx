@@ -2,27 +2,24 @@
 import React, { useState, useEffect } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 
-
-
 interface DriveFile {
   id: string;
   name: string;
 }
 
 interface GDrivePickerProps {
-  onFilesSelected: (files: DriveFile[], accessToken: string) => void; // <-- updated
+  onFilesSelected: (files: DriveFile[]) => void;
 }
-
 
 const GDrivePicker: React.FC<GDrivePickerProps> = ({ onFilesSelected }) => {
   const [loading, setLoading] = useState(false);
   const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
-  let accessToken = '';
+
   const login = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
-      accessToken = tokenResponse.access_token;
+      const accessToken = tokenResponse.access_token;
       setLoading(true);
       setError(null);
       try {
@@ -70,8 +67,7 @@ const GDrivePicker: React.FC<GDrivePickerProps> = ({ onFilesSelected }) => {
 
   const handleImport = () => {
     const filesToImport = driveFiles.filter((file) => selectedFiles.has(file.id));
-    onFilesSelected(filesToImport, accessToken);
-;
+    onFilesSelected(filesToImport);
   };
 
   return (

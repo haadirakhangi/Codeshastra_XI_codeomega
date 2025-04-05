@@ -1,15 +1,24 @@
 import axios from 'axios';
 import { useState, useRef } from 'react';
-import { FaPaperclip, FaMicrophone, FaUserCircle, FaRobot, FaDropbox, FaRegFileAlt } from 'react-icons/fa';
+import { FaPaperclip, FaMicrophone, FaUserCircle, FaRobot, FaDropbox, FaRegFileAlt, FaFileAlt } from 'react-icons/fa';
 import { SiNotion } from 'react-icons/si';
 import { FcGoogle } from 'react-icons/fc';
-import GDrivePicker from '../components/GdrivePicker';
+import GDrivePicker from './GDrivePicker';
 import DropboxPicker from './DropboxPicker';
 import NotionPicker from './NotionPicker';
+import { motion } from 'framer-motion';
 
+interface ChatContentProps {
+  onDocumentClick?: () => void;
+  documentTitle?: string;
+  showDocumentBox?: boolean;
+}
 
-
-const ChatContent: React.FC = () => {
+const ChatContent: React.FC<ChatContentProps> = ({
+  onDocumentClick,
+  documentTitle = "Design: The Differentiator Your Brand Can't Ignore",
+  showDocumentBox = false
+}) => {
   const [query, setQuery] = useState('');
   const [response, setResponse] = useState<string | null>(null);
   const [messages, setMessages] = useState<{ sender: string; text: string }[]>([]);
@@ -21,10 +30,6 @@ const ChatContent: React.FC = () => {
   const [uploadedFiles, setUploadedFiles] = useState<{ id: string; name: string }[]>([]);
   const [showDropboxPicker, setShowDropboxPicker] = useState(false);
   const [showNotionPicker, setShowNotionPicker] = useState(false);
-
-
-
-
 
   const handleExternalSource = (source: string) => {
     setShowUploadMenu(false);
@@ -45,7 +50,6 @@ const ChatContent: React.FC = () => {
       setShowGDrivePicker(false);
     }
   };
-
 
   const handleSend = async () => {
     if (!query.trim()) return;
@@ -106,10 +110,8 @@ const ChatContent: React.FC = () => {
     }
   };
 
-
   return (
     <main className="flex-1 flex flex-col h-screen relative bg-gray-50">
-
       {showNotionPicker && (
         <div className="absolute inset-0 bg-white z-10 overflow-auto">
           <NotionPicker
@@ -131,7 +133,6 @@ const ChatContent: React.FC = () => {
           />
         </div>
       )}
-
 
       {showGDrivePicker && (
         <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm z-30 flex items-center justify-center">
@@ -187,7 +188,6 @@ const ChatContent: React.FC = () => {
         </div>
       )}
 
-
       {uploadNotification && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-100 text-green-800 px-4 py-2 rounded-md shadow-md z-10">
           {uploadNotification}
@@ -195,6 +195,27 @@ const ChatContent: React.FC = () => {
       )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {/* Document Box - Appears when Canvas is closed */}
+        {showDocumentBox && (
+          <motion.div
+            className="mb-4 cursor-pointer"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            onClick={onDocumentClick}
+          >
+            <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-3">
+                <FaFileAlt className="text-blue-500 text-xl" />
+                <div className="flex-1">
+                  <h3 className="font-medium text-gray-900">{documentTitle}</h3>
+                  <p className="text-sm text-gray-500">Click to open document</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {messages.map((msg, idx) => (
           <div
             key={idx}
