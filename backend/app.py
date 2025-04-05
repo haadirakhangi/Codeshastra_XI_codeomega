@@ -24,6 +24,7 @@ from flask import (
     Response,
     stream_with_context,
     session,
+    send_from_directory,
 )
 import json
 from pymongo import MongoClient
@@ -593,6 +594,67 @@ def upload_docs():
     return jsonify({'message': f'{len(saved_files)} file(s) uploaded successfully.'}),200
 
 
+@app.route('/upload', methods=['POST'])
+def upload_files():
+    if 'documents' not in request.files:
+        return jsonify({'error': 'No files part in the request'}), 400
+
+    files = request.files.getlist('documents')
+    saved_files = []
+
+    for file in files:
+        if file.filename == '':
+            continue
+        filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}-{secure_filename(file.filename)}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        saved_files.append(filename)
+
+    return jsonify({
+        'message': 'Files uploaded successfully!',
+        'files': saved_files
+    }), 200
+
+
+
+@app.route('/files', methods=['GET'])
+def get_user_files():
+    user_id = session.get('user_id')  # You can still use this for folder structuring
+    if not user_id:
+        return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+    user_dir = os.path.join('./uploads', user_id, 'text')
+    
+    if not os.path.exists(user_dir):
+        return jsonify({"message": "No files found for this user."}), 404
+
+    files = []
+    for filename in os.listdir(user_dir):
+        file_path = os.path.join(user_dir, filename)
+        if os.path.isfile(file_path):
+            files.append({
+                "filename": filename,
+                "path": f"uploads/{user_id}/text/{filename}"
+            })
+
+    return jsonify({
+        "user_id": user_id,
+        "files": files
+    })
+
+
+
+@app.route('/uploads/<user_id>/text/<filename>', methods=['GET'])
+def serve_uploaded_file(user_id, filename):
+ # You can still use this for folder structuring
+    print(f"Current user ID: {user_id}")
+  
+
+    file_path = os.path.join("uploads", user_id, "text")
+
+    print(f"File path: {file_path}")
+    return send_from_directory(file_path, filename, as_attachment=False)
+   
+     
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
