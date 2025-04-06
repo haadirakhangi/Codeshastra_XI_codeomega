@@ -103,8 +103,8 @@ question_router = route_prompt | structured_llm_router
 structured_llm_grader = LLM.with_structured_output(GradeDocuments)
 
 grade_system_prompt = """You are a grader assessing relevance of a retrieved document to a user question. \n 
-    If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
-    It does not need to be a stringent test. The goal is to filter out erroneous retrievals. \n
+    If the document contains some parts that answers the user's question or keyword(s) or semantic meaning related to the user question, grade it as relevant. If even a certain part from the document contains some information about the user question, output as 'yes'\n
+    It does not need to be a stringent test. The goal is to filter out erroneous retrievals. When the user is asking for a request like email, your aim should be to output 'yes' if it has the slightest information on the actual topic.\n
     Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question."""
 grade_prompt = ChatPromptTemplate.from_messages(
     [
@@ -178,20 +178,19 @@ def retrieve(state):
     user_id = session["user_id"]
     # print(f"FAISS index path: {faiss_index_path}")
     vectorstore = FAISS.load_local(FAISS_INDEX_PATH, embeddings=EMBEDDINGS, allow_dangerous_deserialization=True)
-    # RERANKER_MODEL = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")
-    # compressor = CrossEncoderReranker(model=RERANKER_MODEL, top_n=5)
-    # compression_retriever = ContextualCompressionRetriever(
-    #     base_compressor=compressor, base_retriever=vectorstore.as_retriever( search_kwargs={"k": 1000} )
-    # )
+    RERANKER_MODEL = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")
+    compressor = CrossEncoderReranker(model=RERANKER_MODEL, top_n=5)
+    compression_retriever = ContextualCompressionRetriever(
+        base_compressor=compressor, base_retriever=vectorstore.as_retriever()
+    )
     # # Retrieval
-    retriever = vectorstore.as_retriever(search_type="mmr")
+    retriever = vectorstore.as_retriever()
     base_docs = retriever.invoke(question, filter={"dept": new_dept[0]})
-    all_docs = retriever.invoke(question)
-    print("BASE DOCS", base_docs)
+    rel_docs = compression_retriever.invoke(question, filter={"dept": new_dept[0]})
     print(len(base_docs))
-    print(len(all_docs))
+    print(len(rel_docs))
 
-    return {"documents": base_docs, "question": question}
+    return {"documents": rel_docs, "question": question}
 
 def generate(state):
     """
@@ -242,15 +241,45 @@ The report should be written in **Markdown format** and cover all relevant aspec
      - Lists
      - Bold for emphasis
 """
+    email_prompt = """You are an expert in writing professional and effective emails.
+
+Your task is to write an email that fulfills the user's intent based on the question, using the supporting context provided.
+
+## ✉️ Email Requirements:
+- Include the following fields:
+  - **To**: Based on the recipient(s) implied in the user request or context.
+  - **Subject**: A clear and concise subject line that reflects the purpose.
+  - **Body**: A professional, coherent message that includes:
+    - A proper greeting
+    - Clear, relevant information from the context
+    - A call to action or closing statement
+    - Polite tone and appropriate formatting
+
+Generate the full email now with the fields:
+
+**To:**  
+**Subject:**  
+**Body:**"""
     if prompt_type == "generate_report":
         print("GENERATING REPORT...")
         generation_system_prompt = generate_report_prompt
+    elif prompt_type == "write_email":
+        generation_system_prompt = email_prompt
+        generation_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", generation_system_prompt),
+                ("human", "CONTEXT:\n{context}: \n\n USER QUESTION: {question}"),
+            ]
+        )
+        rag_chain = generation_prompt | LLM.with_structured_output(GenerateEmail)
+        generation = rag_chain.invoke({"context": documents, "question": question})
+        return {"documents": documents, "question": question, "generation": generation, "action": prompt_type}
     else:
         generation_system_prompt = "You're an AI assistant for Sentra Vault. Answer the user question based on the context provided.\n\n"
     generation_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", generation_system_prompt),
-            ("human", "SALES DATA / CONTEXT:\n{context}: \n\n USER QUESTION: {question}"),
+            ("human", "CONTEXT:\n{context}: \n\n USER QUESTION: {question}"),
         ]
     )
 
