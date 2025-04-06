@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import DataSourceModal from './DataSourceModal';
-import GDrivePicker from './GdrivePicker';
+import GDrivePicker from './GDrivePicker';
 
 const MainContent: React.FC = () => {
   const [uploading, setUploading] = useState(false);

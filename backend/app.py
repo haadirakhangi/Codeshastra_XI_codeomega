@@ -37,6 +37,7 @@ from pymongo.server_api import ServerApi
 from urllib.parse import quote_plus
 from bson import ObjectId
 from werkzeug.utils import secure_filename
+import base64
 from datetime import datetime
 
 from models.data_models import *
@@ -547,7 +548,7 @@ def login():
 
     if user_data and bcrypt.check_password_hash(user_data["password"], password):
         session["user_id"] = str(user_data["_id"])  # Store user ID in session
-        return jsonify({"message": "Login successful"}), 200
+        return jsonify({"message": "Login successful","email":email}), 200
     else:
         return jsonify({"error": "Invalid email or password"}), 401
     
@@ -651,7 +652,7 @@ def upload_docs():
 
     if not user_id:
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
-
+    print(request.files)
     if 'files' not in request.files:
         return jsonify({'error': 'No file part'}), 400
 
@@ -685,6 +686,26 @@ def upload_docs():
             elif file_type in ['jpg', 'jpeg', 'png']:
                 image.append(file_path)
     all_docs_with_metadata=[]
+    # client = genai.Client(api_key="YOUR_API_KEY")
+    # def encode_image_base64(image_path):
+    #     with open(image_path, "rb") as image_file:
+    #         return base64.b64encode(image_file.read()).decode("utf-8")
+
+    # base_list = []
+    # for image_path in image:
+    #     b64_string = encode_image_base64(image_path)
+    #     mime_type = "image/jpeg" if image_path.lower().endswith(("jpg", "jpeg")) else "image/png"
+    #     base_list.append(f"data:{mime_type};base64,{b64_string}")
+
+
+    # # Send to Gemini
+    # response = client.models.generate_content(
+    #     model="gemini-2.0-flash-exp",
+    #     contents=["I want you to analyze these images and give me a summary of its description. i want you to return me a list of images according to list of images provided to you.", base_list],
+    # )
+    
+    # print("Response from Gemini:", response)
+
     for pdf in pdfs:
         system_prompt= """You have to determine who has access to this document based on the following instruction. The types of users are: intern, manager and admin. 
         - Legal documents should not be made available to interns
@@ -752,6 +773,7 @@ def upload_docs():
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
+    print(request.files)
     if 'documents' not in request.files:
         return jsonify({'error': 'No files part in the request'}), 400
 
@@ -918,9 +940,15 @@ def connected_files():
 
     # Ask question using Gemini
     try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+        user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
+        role = user_data["role"]
+        dept = user_data["department"]
         response = client.models.generate_content(
             model="gemini-1.5-flash",
-            contents=[*uploaded_docs, question]
+            contents=[*uploaded_docs, "My role is" + role + "and i belong to " + dept + "department and here is my question. Answer my question " + question]
         )
 
 
