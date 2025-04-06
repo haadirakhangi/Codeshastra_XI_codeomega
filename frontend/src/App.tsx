@@ -38,11 +38,7 @@ function App() {
             <Route path="structured" element={<StructuredDataDocumentUI />} />
             <Route path="pdfs" element={<PDFDocument />} />
             <Route path="chat-kush" element={<ChatContentKush />} />
-<<<<<<< HEAD
-            <Route path='gdrive' element={<GDrivePicker/>} />
-=======
             <Route path="kush-ai" element={<KushAI />} />
->>>>>>> 0de3de889b466398485643f46734a2ce98795d4f
           </Route>
         </Routes>
       </BrowserRouter>

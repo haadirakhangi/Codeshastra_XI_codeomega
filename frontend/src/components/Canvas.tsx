@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface CanvasProps {
-    initialTitle?: string;
-    initialContent?: string;
-    onClose?: (title: string, content: string) => void;
-}
+    initialTitle: string;
+    content: string; // Change this from initialContent to a prop that can update
+    onClose: (title: string, content: string) => void;
+  }
 
 const parseMarkdownLine = (line: string, index: number) => {
     if (line.startsWith('###')) {
@@ -61,143 +61,9 @@ const parseMarkdownLine = (line: string, index: number) => {
     return <p key={index} className="text-base leading-relaxed text-gray-800">{renderStyledText(parsed)}</p>;
 };
 
-// Improved text streaming animation component with character-by-character effect
-const TextStreamingEffect: React.FC<{ text: JSX.Element[] }> = ({ text }) => {
-    const [displayedLines, setDisplayedLines] = useState<JSX.Element[]>([]);
-    const [currentLineIndex, setCurrentLineIndex] = useState(0);
-    const [charIndex, setCharIndex] = useState(0);
-    const [currentLineContent, setCurrentLineContent] = useState<JSX.Element | null>(null);
-    
-    useEffect(() => {
-        // Reset animation when text changes
-        setDisplayedLines([]);
-        setCurrentLineIndex(0);
-        setCharIndex(0);
-        setCurrentLineContent(null);
-    }, [text]);
-    
-    useEffect(() => {
-        if (currentLineIndex >= text.length) return;
-        
-        const currentLine = text[currentLineIndex];
-        
-        // For heading elements, we handle them as complete elements
-        if (
-            React.isValidElement(currentLine) && 
-            (currentLine.type === 'h1' || currentLine.type === 'h2' || currentLine.type === 'h3')
-        ) {
-            const timer = setTimeout(() => {
-                setDisplayedLines(prev => [...prev, currentLine]);
-                setCurrentLineIndex(prev => prev + 1);
-                setCharIndex(0);
-                setCurrentLineContent(null);
-            }, 500); // Slower typing for headings
-            
-            return () => clearTimeout(timer);
-        }
-        
-        // For paragraph content, handle character by character for text
-        if (React.isValidElement(currentLine) && currentLine.type === 'p') {
-            // Extract the children to process character by character
-            const children = React.Children.toArray(currentLine.props.children);
-            let totalLength = 0;
-            const flatChildren = children.map(child => {
-                if (typeof child === 'string') {
-                    totalLength += child.length;
-                    return child;
-                } else if (React.isValidElement(child)) {
-                    // For elements like <strong> or <em>
-                    const content = child.props.children;
-                    if (typeof content === 'string') {
-                        totalLength += content.length;
-                    }
-                    return child;
-                }
-                return '';
-            });
-            
-            if (charIndex <= totalLength) {
-                let currentChar = 0;
-                const processedChildren = flatChildren.map((child, idx) => {
-                    if (typeof child === 'string') {
-                        // For plain text, show up to charIndex
-                        const visiblePart = child.substring(0, Math.max(0, charIndex - currentChar));
-                        currentChar += child.length;
-                        return visiblePart;
-                    } else if (React.isValidElement(child)) {
-                        // For styled text (bold/italic)
-                        const content = child.props.children;
-                        if (typeof content === 'string') {
-                            const visiblePart = content.substring(0, Math.max(0, charIndex - currentChar));
-                            currentChar += content.length;
-                            return React.cloneElement(child, {}, visiblePart);
-                        }
-                    }
-                    return child;
-                });
-                
-                const currentLineWithTyping = React.cloneElement(
-                    currentLine,
-                    { ...currentLine.props },
-                    processedChildren
-                );
-                
-                setCurrentLineContent(currentLineWithTyping);
-                
-                // Only advance to next character if we haven't completed the line
-                if (charIndex < totalLength) {
-                    const speed = Math.random() * 50 + 30; // Random speed between 30-80ms for more natural effect
-                    const timer = setTimeout(() => {
-                        setCharIndex(prev => prev + 1);
-                    }, speed);
-                    
-                    return () => clearTimeout(timer);
-                } else {
-                    // Line is complete, move to next line
-                    const timer = setTimeout(() => {
-                        setDisplayedLines(prev => [...prev, currentLine]);
-                        setCurrentLineIndex(prev => prev + 1);
-                        setCharIndex(0);
-                        setCurrentLineContent(null);
-                    }, 200); // Pause between lines
-                    
-                    return () => clearTimeout(timer);
-                }
-            }
-        }
-    }, [currentLineIndex, charIndex, text]);
-    
-    return (
-        <>
-            {displayedLines}
-            {currentLineContent}
-            {/* Add blinking cursor effect at the end of typing */}
-            {currentLineContent && (
-                <span className="inline-block w-2 h-4 ml-1 bg-black animate-pulse"></span>
-            )}
-        </>
-    );
-};
 
-const Canvas: React.FC<CanvasProps> = ({
-    initialTitle = '# Design: The Differentiator Your Brand Can\'t Ignore',
-    initialContent = `
-## Introduction
-
-In an increasingly competitive and fast-paced world, **design** has emerged as a critical *differentiator*...
-
-## Design Enhances User Experience
-
-At its core, **design** is about *problem-solving*...
-
-## Design Drives Business Success
-
-Investing in **quality design** isn't just beneficial for users...
-`,
-    onClose
-}) => {
+const Canvas: React.FC<CanvasProps> = ({ initialTitle, content, onClose }) =>  {
     const [title, setTitle] = useState(initialTitle);
-    const [content, setContent] = useState(initialContent);
     const [isEdited, setIsEdited] = useState(false);
     const [isVisible, setIsVisible] = useState(true);
 
@@ -235,7 +101,6 @@ Investing in **quality design** isn't just beneficial for users...
 
     const handleSave = () => {
         setTitle(tempTitle);
-        setContent(tempContent);
         setIsEdited(true);
         setEditMode(false);
         // Reset streaming effect when content changes
@@ -243,28 +108,11 @@ Investing in **quality design** isn't just beneficial for users...
     };
 
     const renderMarkdown = (text: string) => {
-        const elements = text
-            .split('\n')
-            .filter(line => line.trim() !== '')
-            .map((line, idx) => parseMarkdownLine(line, idx));
-        
-        if (showStreamingEffect && !editMode) {
-            return <TextStreamingEffect text={elements} />;
-        }
-        
-        return elements;
-    };
-
-    // Once streaming is complete, this will turn off the effect
-    // Increased the timeout to allow the slower typing effect to complete
-    useEffect(() => {
-        const estimatedTimeForAnimation = content.length * 50 + 2000; // Rough estimate based on content length
-        const timer = setTimeout(() => {
-            setShowStreamingEffect(false);
-        }, estimatedTimeForAnimation);
-        
-        return () => clearTimeout(timer);
-    }, [content, title]);
+    return text
+        .split('\n')
+        .filter(line => line.trim() !== '')
+        .map((line, idx) => parseMarkdownLine(line, idx));
+};
 
     return (
         <AnimatePresence>

@@ -38,7 +38,9 @@ const ChatContentKush: React.FC = () => {
   const [showDropboxPicker, setShowDropboxPicker] = useState(false);
   const [showNotionPicker, setShowNotionPicker] = useState(false);
   const [showCanvas, setShowCanvas] = useState(false);
-  const [canvasTitle, setCanvasTitle] = useState("# Design: The Differentiator Your Brand Can't Ignore");
+  const [canvasTitle, setCanvasTitle] = useState("Generated Report");
+  const [accumulatedCanvasContent, setAccumulatedCanvasContent] = useState('');
+
   const [canvasContent, setCanvasContent] = useState(`
 ## Introduction
 
@@ -146,6 +148,7 @@ Investing in **quality design** isn't just beneficial for users...
       const decoder = new TextDecoder('utf-8');
       let done = false;
       let accumulatedContent = '';
+      let called = false;
 
       while (!done) {
         const { value, done: doneReading } = await reader.read();
@@ -153,7 +156,6 @@ Investing in **quality design** isn't just beneficial for users...
 
         const chunkValue = decoder.decode(value);
         const events = chunkValue.split("\n\n");
-
         for (const event of events) {
           if (!event.startsWith("data: ")) continue;
           const dataStr = event.replace("data: ", "").trim();
@@ -161,7 +163,7 @@ Investing in **quality design** isn't just beneficial for users...
 
           try {
             const dataObj = JSON.parse(dataStr);
-
+            console.log("data",dataObj.action)
             if (dataObj.payload_type === 'values' && dataObj.error) {
               // 🔴 Handle error
               const errorMessage = dataObj.error;
@@ -175,10 +177,21 @@ Investing in **quality design** isn't just beneficial for users...
               }]);
               return; // Stop further processing
             }
-            else if (dataObj.payload_type === 'values' && dataObj.generated_report === 'true') {
-              setShowCanvas(true);
+            else if (dataObj.payload_type === 'values' && dataObj.action === 'generate_report') {
+              setAccumulatedCanvasContent('');
+              called = true;
             }
-            if (dataObj.payload_type === 'message') {
+
+            if (called && dataObj.content) {
+              setAccumulatedCanvasContent(prev => {
+                const updatedContent = prev + dataObj.content;
+                setCanvasContent(updatedContent); // This updates the canvas content
+                return updatedContent;
+              });
+              setShowCanvas(true); // Ensures the canvas is visible
+            }
+            
+            if (dataObj.payload_type === 'message' && called==false) {
               const {
                 content,
                 function_call,
@@ -196,6 +209,9 @@ Investing in **quality design** isn't just beneficial for users...
                   case 'GradeDocuments':
                     spinnerText = '📊 Re-ranking the documents...';
                     break;
+                  case 'GenerateEmail':
+                    setMessages(prev => [...prev, { sender: 'bot', text: <EmailComposer initialTo={dataObj.arguments.to} initialSubject={dataObj.arguments.subject} initialMessage={dataObj.arguments.body} /> }]);
+                    return;
                   default:
                     spinnerText = `Running ${function_name}...`;
                 }
@@ -548,7 +564,7 @@ Investing in **quality design** isn't just beneficial for users...
 
           <button
             onClick={handleSend}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-blue-700"
           >
             Send
           </button>
@@ -557,7 +573,7 @@ Investing in **quality design** isn't just beneficial for users...
       {showCanvas && (
         <Canvas
           initialTitle={canvasTitle}
-          initialContent={canvasContent}
+          content={canvasContent}
           onClose={handleCanvasClose}
         />
       )}
