@@ -1,5 +1,8 @@
+import mimetypes
 from dotenv import load_dotenv
+from google import genai
 import os
+import io
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.output_parsers import StrOutputParser
 from typing import List
@@ -770,21 +773,42 @@ def upload_new_files():
     user_id = session.get('user_id')
     if not user_id:
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+
     if 'documents' not in request.files:
         return jsonify({'error': 'No files part in the request'}), 400
+
     files = request.files.getlist('documents')
     saved_files = []
+
     for file in files:
         if file.filename == '':
             continue
+
         filename = secure_filename(file.filename)
-        folder_type = 'text' if filename.endswith('.pdf') else 'image'
-        user_folder = os.path.join(UPLOAD_FOLDER, str(user_id), folder_type)
+
+        # You can determine type by MIME type or just fallback to 'others'
+        # content_type = file.mimetype or ''
+        # if content_type.startswith('text/'):
+        #     folder_type = 'text'
+        # elif content_type.startswith('image/'):
+        #     folder_type = 'image'
+        # elif content_type.startswith('application/pdf'):
+        #     folder_type = 'pdf'
+        # else:
+        folder_type = 'docs'
+
+        user_folder = os.path.join("public2", str(user_id), folder_type)
         os.makedirs(user_folder, exist_ok=True)
 
         file_path = os.path.join(user_folder, filename)
         file.save(file_path)
-        saved_files.append(filename)
+
+        saved_files.append({
+            'filename': filename,
+            'path': file_path,
+            'type': folder_type
+        })
+
     return jsonify({
         'message': f'{len(saved_files)} file(s) uploaded successfully.',
         'files': saved_files
@@ -801,7 +825,89 @@ def serve_uploaded_file(user_id, filename):
     print(f"File path: {file_path}")
     return send_from_directory(file_path, filename, as_attachment=False)
    
-     
+
+
+
+client = genai.Client(api_key= os.getenv("GOOGLE_API_KEY"))
+
+@app.route('/connected-files', methods=['POST'])
+def connected_files():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+
+    data = request.get_json()
+    connected_files = data.get('connected_files', [])
+    question = data.get('question', '')
+    
+    print(f"Question: {question}")
+    print(f"Connected files from frontend: {connected_files}")
+
+    # Define user's upload directory
+    user_dir = os.path.join('public2', user_id ,'docs')
+    print(f"User directory: {user_dir}")
+    if not os.path.exists(user_dir):
+        return jsonify({"message": "No files found for this user."}), 404
+
+    # Prepare list of matched files
+    matched_files = []
+    connected_normalized = [cf.replace(" ", "_").strip().lower() for cf in connected_files]
+
+    for filename in os.listdir(user_dir):
+        file_path = os.path.join(user_dir, filename)
+
+        if os.path.isfile(file_path):
+            normalized_filename = filename.replace(" ", "_").strip().lower()
+
+            if normalized_filename in connected_normalized:
+                mime_type, _ = mimetypes.guess_type(file_path)
+                matched_files.append({
+                "filename": filename,
+                "path": f"{file_path}",
+                "type": mime_type or "application/octet-stream"
+                })
+
+
+    print(f"Matched Files to Process: {matched_files}")
+   
+       # Upload files to Gemini
+    uploaded_docs = []
+    for file in matched_files:
+        file_path = file['path']
+        type = file['type']
+        try:
+            with open(file_path, "rb") as f:
+                file_data = io.BytesIO(f.read())
+                uploaded_doc = client.files.upload(
+                    file=file_data,
+                    config=dict(mime_type=type),
+                )
+                uploaded_docs.append(uploaded_doc)
+        except Exception as e:
+            print(f"Error uploading {file['filename']}: {e}")
+            return jsonify({"error": f"Failed to upload file {file['filename']}"}), 500
+
+    # Ask question using Gemini
+    try:
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=[*uploaded_docs, question]
+        )
+
+
+        print(f"Gemini response: {response.text}")
+        # Clean up all files uploaded to the client
+        for f in client.files.list():
+            try:
+                print(f"Deleting file: {f.name}")
+                client.files.delete(f.name)
+    
+            except Exception as e:
+                print(f"Error deleting file {e}") 
+        return jsonify({"message": response.text})
+    except Exception as e:
+        print(f"Error generating content: {e}")
+        return jsonify({"error": "Gemini failed to respond."}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

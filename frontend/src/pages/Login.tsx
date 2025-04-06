@@ -50,7 +50,7 @@ export default function Login() {
                                 required
                                 value={formData.email}
                                 onChange={handleChange}
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-gray-600 sm:text-sm"
                             />
                         </div>
                     </div>
@@ -67,7 +67,7 @@ export default function Login() {
                                 required
                                 value={formData.password}
                                 onChange={handleChange}
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-indigo-600 sm:text-sm"
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:outline-gray-600 sm:text-sm"
                             />
                         </div>
                     </div>
@@ -76,7 +76,7 @@ export default function Login() {
                         <button
                             type="button"
                             onClick={handleSubmit}
-                            className="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                            className="flex w-full justify-center rounded-md bg-gray-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600"
                         >
                             Sign in
                         </button>
@@ -85,7 +85,7 @@ export default function Login() {
 
                 <p className="mt-10 text-center text-sm text-gray-500">
                     Not a member?
-                    <a href="/register" className="font-semibold text-indigo-600 hover:text-indigo-500 ml-1">
+                    <a href="/register" className="font-semibold text-gray-600 hover:text-gray-500 ml-1">
                         Register here
                     </a>
                 </p>
