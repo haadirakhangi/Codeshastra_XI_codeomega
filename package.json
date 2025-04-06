@@ -1,7 +1,0 @@
-{
-  "dependencies": {
-    "@xyflow/react": "^12.5.4",
-    "react-archer": "^4.4.0",
-    "react-dropzone": "^14.3.8"
-  }
-}

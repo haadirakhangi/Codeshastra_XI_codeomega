@@ -3,7 +3,7 @@ import { useState, useRef } from 'react';
 import { FaPaperclip, FaMicrophone, FaUserCircle, FaRobot, FaDropbox, FaRegFileAlt, FaFileAlt } from 'react-icons/fa';
 import { SiNotion } from 'react-icons/si';
 import { FcGoogle } from 'react-icons/fc';
-import GDrivePicker from './GdrivePicker';
+import GDrivePicker from './GDrivePicker';
 import DropboxPicker from './DropboxPicker';
 import NotionPicker from './NotionPicker';
 import { motion } from 'framer-motion';

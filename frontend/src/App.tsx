@@ -11,7 +11,8 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import Policy from './pages/Policy';
 import ImageDocumentUI from './pages/Image';
 import StructuredDataDocumentUI from './pages/Structure';
-import PDFDocument from './pages/PDFs'; import ChatContentKush from './components/ChatContentKush';
+import PDFDocument from './pages/PDFs';
+import ChatContentKush from './components/ChatContentKush';
 import ConnectedDocsChat from './components/DocumentNode';
 import Landing from './pages/Landing';
 import InteractiveAI from './components/InteractiveAI';
@@ -30,13 +31,13 @@ function App() {
           {/* Admin Routes with Sidebar */}
           <Route path="/" element={<AdminLayout />}>
             <Route index element={<Home />} />
-            <Route path="chat" element={<ChatInterface />} />
+            {/* <Route path="chat" element={<ChatInterface />} /> */}
             <Route path="all-document" element={<AllDocument />} />
             <Route path="policy" element={<Policy />} />
             <Route path="images" element={<ImageDocumentUI />} />
             <Route path="structured" element={<StructuredDataDocumentUI />} />
             <Route path="pdfs" element={<PDFDocument />} />
-            <Route path="chat-kush" element={<ChatContentKush />} />
+            <Route path="chat" element={<ChatContentKush />} />
             <Route path="interactive-ai" element={<InteractiveAI />} />
 
           </Route>

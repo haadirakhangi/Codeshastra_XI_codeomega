@@ -1,12 +1,20 @@
 import React, { useState } from 'react';
 import { Send, X } from 'lucide-react';
 
-const EmailComposer: React.FC = () => {
-  const [to, setTo] = useState('legal@company.com');
-  const [subject, setSubject] = useState('Contract Review Request');
-  const [message, setMessage] = useState(
-    'I need the team to review the attached contract before our client meeting on Friday.'
-  );
+interface EmailComposerProps {
+  initialTo?: string;
+  initialSubject?: string;
+  initialMessage?: string;
+}
+
+const EmailComposer: React.FC<EmailComposerProps> = ({
+  initialTo = 'legal@company.com',
+  initialSubject = 'Contract Review Request',
+  initialMessage = 'I need the team to review the attached contract before our client meeting on Friday.',
+}) => {
+  const [to, setTo] = useState(initialTo);
+  const [subject, setSubject] = useState(initialSubject);
+  const [message, setMessage] = useState(initialMessage);
 
   const handleSendEmail = () => {
     console.log('Sending email with:', { to, subject, message });
@@ -83,7 +91,7 @@ const EmailComposer: React.FC = () => {
         </div>
 
         {/* Timestamp */}
-        <span className="text-xs text-gray-500 mt-2 ml-1">9:11 AM</span>
+        <span className="text-xs text-gray-500 mt-2 ml-1">{new Date().toLocaleString()}</span>
       </div>
     </div>
   );

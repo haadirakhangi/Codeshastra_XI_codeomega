@@ -37,6 +37,7 @@ from pymongo.server_api import ServerApi
 from urllib.parse import quote_plus
 from bson import ObjectId
 from werkzeug.utils import secure_filename
+import base64
 from datetime import datetime
 
 from models.data_models import *
@@ -56,7 +57,7 @@ user_collection = mongodb["users"]
 
 bcrypt = Bcrypt(app)
 
-
+FAISS_INDEX_PATH = os.path.join("faiss_index", "index.faiss")
 LLM = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 EMBEDDINGS = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
 
@@ -175,20 +176,22 @@ def retrieve(state):
     dept = state["department"]
     new_dept = state["new_dept"]
     user_id = session["user_id"]
-    faiss_index_path = os.path.join(UPLOAD_FOLDER, str(user_id), "text",'faiss_index', 'index.faiss')
     # print(f"FAISS index path: {faiss_index_path}")
-    vectorstore = FAISS.load_local(faiss_index_path, embeddings=EMBEDDINGS, allow_dangerous_deserialization=True)
-    RERANKER_MODEL = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")
-    compressor = CrossEncoderReranker(model=RERANKER_MODEL, top_n=5)
-    compression_retriever = ContextualCompressionRetriever(
-        base_compressor=compressor, base_retriever=vectorstore.as_retriever()
-    )
-    query = {"$or": [{"dept": page} for page in new_dept]}
-    # Retrieval
-    documents = compression_retriever.invoke(question, metadata_filter={"access":query})
-    print(documents[:2])
-    # print(documents[0])
-    return {"documents": documents, "question": question}
+    vectorstore = FAISS.load_local(FAISS_INDEX_PATH, embeddings=EMBEDDINGS, allow_dangerous_deserialization=True)
+    # RERANKER_MODEL = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")
+    # compressor = CrossEncoderReranker(model=RERANKER_MODEL, top_n=5)
+    # compression_retriever = ContextualCompressionRetriever(
+    #     base_compressor=compressor, base_retriever=vectorstore.as_retriever( search_kwargs={"k": 1000} )
+    # )
+    # # Retrieval
+    retriever = vectorstore.as_retriever(search_type="mmr")
+    base_docs = retriever.invoke(question, filter={"dept": new_dept[0]})
+    all_docs = retriever.invoke(question)
+    print("BASE DOCS", base_docs)
+    print(len(base_docs))
+    print(len(all_docs))
+
+    return {"documents": base_docs, "question": question}
 
 def generate(state):
     """
@@ -541,7 +544,7 @@ def agent_chat():
 - Technical documentation is open to all roles.
 - If the user requests access to a document they are not authorized for, do not elevate their access unless business-critical justification is clearly present in the query.
 """
-    inputs = {"question": user_message,"department": user_data["department"], "access": user_data["role"], "instructions": instructions}
+    inputs = {"question": user_message,"department": user_data['department'], "access": user_data["role"], "instructions": instructions}
     config = {"configurable": {"user_id": user_id, "thread_id": "2"}}
     def generate():
         for s in RAG.stream(
@@ -588,7 +591,7 @@ def agent_chat():
                     if "action" in values_data:
                         action = values_data["action"]
                         data["action"] = action
-                    elif "error" in values_data:
+                    if "error" in values_data:
                         error_message = values_data["error"]
                         data["error"] = error_message
                 yield f"data: {json.dumps(data)}\n\n".encode("utf-8")
@@ -617,11 +620,10 @@ def upload_docs():
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
     user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
     department= user_data["department"]
-    # department = "Legal"
 
     if not user_id:
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
-
+    print(request.files)
     if 'files' not in request.files:
         return jsonify({'error': 'No file part'}), 400
 
@@ -654,8 +656,27 @@ def upload_docs():
                 csvs.append(file_path)
             elif file_type in ['jpg', 'jpeg', 'png']:
                 image.append(file_path)
-    print("CSV FILES UPLOADED\n\n",csvs)
     all_docs_with_metadata=[]
+    # client = genai.Client(api_key="YOUR_API_KEY")
+    # def encode_image_base64(image_path):
+    #     with open(image_path, "rb") as image_file:
+    #         return base64.b64encode(image_file.read()).decode("utf-8")
+
+    # base_list = []
+    # for image_path in image:
+    #     b64_string = encode_image_base64(image_path)
+    #     mime_type = "image/jpeg" if image_path.lower().endswith(("jpg", "jpeg")) else "image/png"
+    #     base_list.append(f"data:{mime_type};base64,{b64_string}")
+
+
+    # # Send to Gemini
+    # response = client.models.generate_content(
+    #     model="gemini-2.0-flash-exp",
+    #     contents=["I want you to analyze these images and give me a summary of its description. i want you to return me a list of images according to list of images provided to you.", base_list],
+    # )
+    
+    # print("Response from Gemini:", response)
+
     for pdf in pdfs:
         system_prompt= """You have to determine who has access to this document based on the following instruction. The types of users are: intern, manager and admin. 
         - Legal documents should not be made available to interns
@@ -700,16 +721,15 @@ def upload_docs():
         # print("metadata", metadata)
         for doc in docs:
             all_docs_with_metadata.append(Document(page_content=doc.page_content, metadata={"access": metadata, "dept":department}))
-    faiss_folder = os.path.join(UPLOAD_FOLDER, str(user_id), "text",'faiss_index')
-    os.makedirs(faiss_folder, exist_ok=True)
-    faiss_index_path = os.path.join(faiss_folder, 'index.faiss')
-    print("ORIGINAL DOCUMENTS UPLOADED\n\n",all_docs_with_metadata[:2])
 
-    if os.path.exists(faiss_index_path):
-        index = (faiss_index_path)
-        vector_store = FAISS.load_local(faiss_index_path, embeddings=EMBEDDINGS, allow_dangerous_deserialization=True)
+
+    if os.path.exists(FAISS_INDEX_PATH):
+        print("HELLO HERE")
+        vector_store = FAISS.load_local(FAISS_INDEX_PATH, embeddings=EMBEDDINGS, allow_dangerous_deserialization=True)
         vector_store.add_documents(all_docs_with_metadata)
+        vector_store.save_local(FAISS_INDEX_PATH)
     else:
+        print("HELLO HERE 2")
         index = faiss.IndexFlatL2(768)
         vector_store = FAISS(
             embedding_function=EMBEDDINGS,
@@ -718,12 +738,13 @@ def upload_docs():
             index_to_docstore_id={}
         )
         vector_store.add_documents(all_docs_with_metadata)
-        vector_store.save_local(faiss_index_path)
+        vector_store.save_local(FAISS_INDEX_PATH)
     return jsonify({'message': f'{len(saved_files)} file(s) uploaded successfully.'}),200
 
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
+    print(request.files)
     if 'documents' not in request.files:
         return jsonify({'error': 'No files part in the request'}), 400
 
@@ -890,9 +911,15 @@ def connected_files():
 
     # Ask question using Gemini
     try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+        user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
+        role = user_data["role"]
+        dept = user_data["department"]
         response = client.models.generate_content(
             model="gemini-1.5-flash",
-            contents=[*uploaded_docs, question]
+            contents=[*uploaded_docs, "My role is" + role + "and i belong to " + dept + "department and here is my question. Answer my question " + question]
         )
 
 
