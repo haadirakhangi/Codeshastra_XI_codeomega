@@ -21,24 +21,24 @@ class AnalyzeQuery(BaseModel):
         ...,
         description="List of the department types who are allowed to access the document",
     )
-class GenerateReport(BaseModel):
+class GenerateEmail(BaseModel):
     """Generate a report based on the user query"""
 
-    title: Literal["vectorstore", "generate_report", "write_email"] = Field(
+    to: str = Field(
         ...,
-        description="Title of the report",
+        description="The receipent of the email",
     )
-    executive_summary: str = Field(
+    subject: str = Field(
         ...,
-        description="Quick snapshot of overall performance, Key achievements and challenges",
+        description="A clear and concise subject line that reflects the purpose of the email.",
     )
-    sales_overview: str = Field(
+    body: str = Field(
         ...,
-        description="A high-level overview of the sales department, including key metrics and performance indicators.",
-    )
-    Challenges : str = Field(
-        ...,
-        description="Challenges faced by the sales department in the past quarter",
+        description="""A professional, coherent message that includes:
+    - A proper greeting
+    - Clear, relevant information from the context
+    - A call to action or closing statement
+    - Polite tone and appropriate formatting""",
     )
 
 class GradeDocuments(BaseModel):
