@@ -424,8 +424,7 @@ const handleSendMessage = async (text: string) => {
     timestamp: new Date(),
   };
 
-  let connectedFileNames = getConnectedFileNames();
-   connectedFileNames = getConnectedFileNames();
+  const connectedFileNames = getConnectedFileNames();
   console.log('Connected file names at time of question:', connectedFileNames);
 
   setMessages((prevMessages) => [...prevMessages, userMessage]);
