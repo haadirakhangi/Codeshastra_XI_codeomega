@@ -39,7 +39,7 @@ from bson import ObjectId
 from werkzeug.utils import secure_filename
 import base64
 from datetime import datetime
-
+from langmem import create_prompt_optimizer
 from models.data_models import *
 
 load_dotenv()
@@ -61,7 +61,31 @@ FAISS_INDEX_PATH = os.path.join("faiss_index", "index.faiss")
 LLM = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 EMBEDDINGS = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
 
+POLICY_PROMPT= """You are a data governance assistant responsible for determining who should have access to a document.
 
+## User Roles:
+- **Admin**: Has full access to all documents by default.
+- **Manager**: Mid-level access. May view operational and department-level documents.
+- **Intern**: Limited access. Only non-sensitive, non-confidential documents should be accessible.
+
+## Departments:
+- HR
+- Sales
+- Marketing
+- Finance
+
+## Access Control Rules:
+1. **Legal documents** should **not** be accessible to **interns**.
+2. **Financial documents** should **not** be accessible to **interns** or **managers** unless explicitly required.
+3. **Admins** have **full access** across all departments and document types.
+4. Department-specific documents should typically only be accessible to users within that department, unless cross-department collaboration is justified.
+5. Highly sensitive data (e.g., personal employee data, financial projections, legal contracts) should be restricted unless job function directly requires access.
+6. **Temporary access** may be granted under the following edge case conditions:
+   - A **justified business need** is provided (e.g., an intern is helping prepare a report and needs limited access).
+   - Access is **time-bound** and **supervised**.
+   - Logging and audit trails are enabled.
+   
+Genereate the policy in markdown format""" 
 # ROUTER
 structured_llm_router = LLM.with_structured_output(AnalyzeQuery)
 router_system_prompt = """You are an expert in analyzing user queries to determine the correct routing destination and whether access should be granted to documents from different departments.
@@ -707,16 +731,11 @@ def upload_docs():
     # print("Response from Gemini:", response)
 
     for pdf in pdfs:
-        system_prompt= """You have to determine who has access to this document based on the following instruction. The types of users are: intern, manager and admin. 
-        - Legal documents should not be made available to interns
-        - Financial documents should not be made available to manager and intern 
-        - Admin has access to all the documents
 
-        Respond with a list of user types who are allowed to access the document.""" 
         context,docs = DataLoader.load_pdf(pdf)
         policy_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", system_prompt),
+                ("system", POLICY_PROMPT),
                 ("human", "{context}"),
             ]
         )
@@ -948,7 +967,7 @@ def connected_files():
         dept = user_data["department"]
         response = client.models.generate_content(
             model="gemini-1.5-flash",
-            contents=[*uploaded_docs, "My role is" + role + "and i belong to " + dept + "department and here is my question. Answer my question according to the way it us useful to me as per my role and department. : " + question]
+            contents=[*uploaded_docs, "My role is" + role + "and i belong to " + dept + "department and here is my question. Answer my question " + question]
         )
 
 
@@ -965,6 +984,30 @@ def connected_files():
     except Exception as e:
         print(f"Error generating content: {e}")
         return jsonify({"error": "Gemini failed to respond."}), 500
+    
+@app.route('/get-policy', methods=['GET'])
+def get_policy():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized. No user in session.'}), 401    
+    return jsonify({"policy": POLICY_PROMPT}), 200
+
+@app.route('/optimize-policy', methods=['POST'])
+def optimize_policy():
+    data : dict = request.get_json()
+    user_id = session.get('user_id')
+    optimizer = create_prompt_optimizer(LLM)
+    conversation = [
+        {"role": "user", "content": "Write a policy for data access"},
+        {"role": "assistant", "content": POLICY_PROMPT},
+    ]
+    feedback = "Response should include a code example"
+
+    trajectories = [(conversation, feedback)]
+    better_prompt = optimizer.ainvoke(
+        {"trajectories": trajectories, "prompt": "You are an astronomy expert"}
+    )
+    return
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
