@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { FaPaperclip, FaMicrophone, FaUserCircle, FaRobot, FaDropbox, FaRegFileAlt } from 'react-icons/fa';
 import { SiNotion } from 'react-icons/si';
 import { FcGoogle } from 'react-icons/fc';
-import GDrivePicker from './GDrivePicker';
+import GDrivePicker from './GdrivePicker';
 import DropboxPicker from './DropboxPicker';
 import NotionPicker from './NotionPicker';
 import { Calendar } from 'lucide-react';

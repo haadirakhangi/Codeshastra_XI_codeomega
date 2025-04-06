@@ -4,7 +4,6 @@ function Home() {
   return (
     <div className="flex h-screen bg-white">
       <MainContent />
-      <RightPanel />
     </div>
   );
 }
