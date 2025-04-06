@@ -62,7 +62,7 @@ export const DocumentCanvas = () => {
     acceptedFiles.forEach((file, index) => {
       const reader = new FileReader();
       
-      reader.onload = () => {
+      reader.onload =  async () => {
         // Create a preview for the file
         const preview = reader.result as string;
         
@@ -88,7 +88,11 @@ export const DocumentCanvas = () => {
         };
         
         // Add the new node to the flowchart
-        setNodes((nds) => [...nds, newNode]);
+        setNodes((nds:any) => [...nds, newNode]);
+
+        // Optionally, you can upload the file to a server here
+        alert('File uploaded successfully');
+    
       };
       
       if (file.type.startsWith('text/')) {
@@ -113,103 +117,360 @@ export const DocumentCanvas = () => {
       }
     });
 
-axios.post('/api/upload-new', {
-      files: acceptedFiles,
-    }).then((response) => {
-      console.log('Files uploaded successfully:', response.data);
+    console.log('Accepted files:', acceptedFiles);
+
+    const formData = new FormData();
+    for (let i = 0; i < acceptedFiles.length; i++) {
+      formData.append("documents", acceptedFiles[i]);
     }
-    ).catch((error) => {
-      console.error('Error uploading files:', error);
-    }
-    );
+  
+  
+       fetch('/api/upload-new', {
+          method: 'POST',
+          credentials: 'include', // required if session is involved
+          body: formData,
+        }).then((res) => {
+          if (res.status === 200) {
+            console.log('Files uploaded successfully');
+          } else {
+            console.error('Error uploading files');
+          }
+        }).catch((error) => {
+          console.error('Error:', error);
+        });
+      
+   
+  
+ 
 
   }, [setNodes]);
   
+
+  //   const newNodes: any[] = [];
+  
+  //   const readFileAsPreview = (file: File, index: number) => {
+  //     return new Promise<void>((resolve) => {
+  //       const reader = new FileReader();
+  //       const id = `document-${Date.now()}-${index}`;
+  //       const position = { x: 100, y: 100 + index * 120 };
+  
+  //       reader.onload = () => {
+  //         const preview = reader.result as string;
+  //         let content = file.type.startsWith('text/') ? preview : undefined;
+  
+  //         const newNode = {
+  //           id,
+  //           type: 'documentNode',
+  //           position,
+  //           data: {
+  //             id,
+  //             label: file.name,
+  //             content,
+  //             type: file.type,
+  //             file,
+  //             preview: content || (file.type.startsWith('image/') ? preview : undefined),
+  //           },
+  //         };
+  //         newNodes.push(newNode);
+  //         resolve();
+  //       };
+  
+  //       if (file.type.startsWith('text/')) {
+  //         reader.readAsText(file);
+  //       } else if (file.type.startsWith('image/')) {
+  //         reader.readAsDataURL(file);
+  //       } else {
+  //         const newNode = {
+  //           id,
+  //           type: 'documentNode',
+  //           position,
+  //           data: {
+  //             id,
+  //             label: file.name,
+  //             type: file.type,
+  //             file,
+  //           },
+  //         };
+  //         newNodes.push(newNode);
+  //         resolve();
+  //       }
+  //     });
+  //   };
+  
+  //   // Wait for all files to be processed
+  //   await Promise.all(acceptedFiles.map(readFileAsPreview));
+  
+  //   // Update nodes after all files are processed
+  //   setNodes((nds) => [...nds, ...newNodes]);
+  
+  //   // Upload to server
+  //   const formData = new FormData();
+  //   acceptedFiles.forEach((file) => formData.append("documents", file));
+  
+  //   fetch('/api/upload-new', {
+  //     method: 'POST',
+  //     credentials: 'include',
+  //     body: formData,
+  //   })
+  //     .then((res) => {
+  //       if (res.status === 200) {
+  //         console.log('Files uploaded successfully');
+  //       } else {
+  //         console.error('Error uploading files');
+  //       }
+  //     })
+  //     .catch((error) => {
+  //       console.error('Error:', error);
+  //     });
+  // }, [setNodes]);
+  
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop });
 
   // Connect nodes with edges
-  const onConnect = useCallback(
-    (params: Connection) => {
-      // Only allow connecting from document nodes to the chat node
-      const sourceNode = nodes.find(node => node.id === params.source);
-      const targetNode = nodes.find(node => node.id === params.target);
+  // const onConnect = useCallback(
+  //   (params: Connection) => {
+  //     // Only allow connecting from document nodes to the chat node
+  //     const sourceNode = nodes.find(node => node.id === params.source);
+  //     const targetNode = nodes.find(node => node.id === params.target);
       
-      if (sourceNode?.type === 'documentNode' && targetNode?.type === 'chatNode') {
-        const edge = {
-          ...params,
-          type: 'custom',
-          animated: true,
-          style: { stroke: '#6366f1', strokeWidth: 2 },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            width: 20,
-            height: 20,
-            color: '#6366f1',
-          },
-          data: {
-            label: 'connected',
-          },
-        };
-        setEdges((eds) => addEdge(edge, eds));
-      }
-    },
-    [nodes, setEdges]
-  );
+  //     if (sourceNode?.type === 'documentNode' && targetNode?.type === 'chatNode') {
+  //       const edge = {
+  //         ...params,
+  //         type: 'custom',
+  //         animated: true,
+  //         style: { stroke: '#6366f1', strokeWidth: 2 },
+  //         markerEnd: {
+  //           type: MarkerType.ArrowClosed,
+  //           width: 20,
+  //           height: 20,
+  //           color: '#6366f1',
+  //         },
+  //         data: {
+  //           label: 'connected',
+  //         },
+  //       };
+  //       setEdges((eds) => addEdge(edge, eds));
+  //     }
+  //   },
+  //   [nodes, setEdges]
+  // );
+
+  // const onConnect = useCallback(
+  //   (params: Connection) => {
+  //     const sourceNode = nodes.find(node => node.id === params.source);
+  //     const targetNode = nodes.find(node => node.id === params.target);
+      
+  //     if (sourceNode?.type === 'documentNode' && targetNode?.type === 'chatNode') {
+  //       const newEdge = {
+  //         ...params,
+  //         type: 'custom',
+  //         animated: true,
+  //         style: { stroke: '#6366f1', strokeWidth: 2 },
+  //         markerEnd: {
+  //           type: MarkerType.ArrowClosed,
+  //           width: 20,
+  //           height: 20,
+  //           color: '#6366f1',
+  //         },
+  //         data: {
+  //           label: 'connected',
+  //         },
+  //       };
+  
+  //       // 👇 Update edges and then compute connected files
+  //       setEdges((eds) => {
+  //         const updatedEdges = addEdge(newEdge, eds);
+  //         const connectedFileNames = getConnectedFileNames(); // pass latest edges here
+  //         console.log('Connected file names (live):', connectedFileNames);
+  //         return updatedEdges;
+  //       });
+  //     }
+  //   },
+  //   [nodes, setEdges]
+  // );
+  
+
 
   // Send a message from the user to the AI
-  const handleSendMessage = (text: string) => {
-    const userMessage: Message = {
-      id: `msg-${Date.now()}-user`,
-      text,
-      sender: 'user',
-      timestamp: new Date(),
-    };
+  // const handleSendMessage = async (text: string) => {
+
     
-    setMessages((prevMessages) => [...prevMessages, userMessage]);
+
+  //   const userMessage: Message = {
+  //     id: `msg-${Date.now()}-user`,
+  //     text,
+  //     sender: 'user',
+  //     timestamp: new Date(),
+  //   };
     
-    // Simulate AI response
-    setTimeout(() => {
-      const connectedDocuments = edges
-        .filter(edge => edge.target === 'chat-1')
-        .map(edge => nodes.find(node => node.id === edge.source))
-        .filter(Boolean);
+  //   setMessages((prevMessages) => [...prevMessages, userMessage]);
+    
+ 
+
+
+  //   // Simulate AI response
+  //   setTimeout( async () => {
+  //     const connectedDocuments = edges
+  //       .filter(edge => edge.target === 'chat-1')
+  //       .map(edge => nodes.find(node => node.id === edge.source))
+  //       .filter(Boolean);
       
-      let responseText = '';
+
+  //          // Send the message to the server
+  //   const connectedFileNames = getConnectedFileNames();
+  //   console.log('Connected file names:', connectedFileNames);
+  //    let aiResponse =  await fetch('/api/connected-files', {
+  //         method: 'POST',
+  //         headers: { 'Content-Type': 'application/json' },
+  //         body: JSON.stringify({
+  //           question: text,
+  //           connected_files: connectedFileNames,
+  //         }),
+  //       });
+
+  //       let responseText = '';
+
+  //       if (connectedDocuments.length === 0) {
+  //         responseText = "I don't have any documents connected. Please connect some documents to help me answer your question.";
+  //       } else {
+  //         if (aiResponse.ok) {
+  //           const responseBody = await aiResponse.text();
+        
+  //           try {
+  //             const parsed = JSON.parse(responseBody);
+  //             responseText = parsed.message || 'AI responded, but no message was returned.';
+  //           } catch (err) {
+  //             responseText = 'Received invalid response from the server.';
+  //           }
+  //         } else {
+  //           responseText = 'Failed to get a response from the AI server.';
+  //         }
+  //       }
       
-      if (connectedDocuments.length === 0) {
-        responseText = "I don't have any documents connected. Please connect some documents to help me answer your question.";
-      } else {
-        responseText = `I've analyzed the ${connectedDocuments.length} document(s) you've connected. Based on ${
-          connectedDocuments.length === 1 ? 'this document' : 'these documents'
-        }, I can provide an answer to your question about "${text}".`;
-      }
+  //     const aiMessage: Message = {
+  //       id: `msg-${Date.now()}-ai`,
+  //       text: responseText,
+  //       sender: 'ai',
+  //       timestamp: new Date(),
+  //     };
       
-      const aiMessage: Message = {
-        id: `msg-${Date.now()}-ai`,
-        text: responseText,
-        sender: 'ai',
-        timestamp: new Date(),
+  //     setMessages((prevMessages) => [...prevMessages, aiMessage]);
+  //   }, 100);
+  // };
+
+
+  // ✅ Utility to extract file names from edges and nodes
+const getConnectedFileNames = () => {
+  return edges
+    .filter((edge) => edge.target === 'chat-1')
+    .map((edge) => {
+      const node = nodes.find((n) => n.id === edge.source);
+      return node?.data?.label;
+    })
+    .filter(Boolean);
+};
+
+const onConnect = useCallback(
+  (params: Connection) => {
+    const sourceNode = nodes.find(node => node.id === params.source);
+    const targetNode = nodes.find(node => node.id === params.target);
+
+    if (sourceNode?.type === 'documentNode' && targetNode?.type === 'chatNode') {
+      const newEdge = {
+        ...params,
+        type: 'custom',
+        animated: true,
+        style: { stroke: '#6366f1', strokeWidth: 2 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 20,
+          height: 20,
+          color: '#6366f1',
+        },
+        data: {
+          label: 'connected',
+        },
       };
-      
-      setMessages((prevMessages) => [...prevMessages, aiMessage]);
-    }, 1000);
+
+      // ✅ Just update edges here, don't call getConnectedFileNames() yet
+      setEdges((eds) => addEdge(newEdge, eds));
+    }
+  },
+  [nodes, setEdges]
+);
+
+React.useEffect(() => {
+  setNodes((nds) =>
+    nds.map((node) => {
+      if (node.id === 'chat-1') {
+        node.data = {
+          ...node.data,
+          messages,
+          onSendMessage: handleSendMessage,
+        };
+      }
+      return node;
+    })
+  );
+}, [messages, setNodes]);
+
+// ✅ Always get latest connected documents when sending message
+const handleSendMessage = async (text: string) => {
+  const userMessage: Message = {
+    id: `msg-${Date.now()}-user`,
+    text,
+    sender: 'user',
+    timestamp: new Date(),
   };
 
+  let connectedFileNames = getConnectedFileNames();
+   connectedFileNames = getConnectedFileNames();
+  console.log('Connected file names at time of question:', connectedFileNames);
+
+  setMessages((prevMessages) => [...prevMessages, userMessage]);
+ 
+  // Simulate AI response delay
+  // setTimeout(async () => {
+
+
+    let responseText = '';
+
+    if (connectedFileNames.length === 0) {
+      responseText = "I don't have any documents connected. Please connect some documents to help me answer your question.";
+    } else {
+      try {
+        const res = await fetch('/api/connected-files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: text,
+            connected_files: connectedFileNames,
+          }),
+        });
+
+        const body = await res.text();
+        const parsed = JSON.parse(body);
+        responseText = parsed.message || 'AI responded, but no message was returned.';
+      } catch (err) {
+        responseText = 'Received invalid response from the server.';
+      }
+    }
+
+    const aiMessage: Message = {
+      id: `msg-${Date.now()}-ai`,
+      text: responseText,
+      sender: 'ai',
+      timestamp: new Date(),
+    };
+
+    setMessages((prevMessages) => [...prevMessages, aiMessage]);
+  // }, 100);
+};
+
+
   // Update chat node with the messages and handler
-  React.useEffect(() => {
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id === 'chat-1') {
-          node.data = {
-            ...node.data,
-            messages,
-            onSendMessage: handleSendMessage,
-          };
-        }
-        return node;
-      })
-    );
-  }, [messages, setNodes]);
+  
 
   // Delete a connection edge
   const onEdgeDelete = useCallback(
@@ -232,6 +493,18 @@ axios.post('/api/upload-new', {
     );
   }, [onEdgeDelete, setEdges]);
 
+
+  // const getConnectedFileNames = () => {
+  //   const connectedDocuments = edges
+  //     .filter(edge => edge.target === 'chat-1')
+  //     .map(edge => nodes.find(node => node.id === edge.source))
+  //     .filter((node) => node?.type === 'documentNode');
+  
+  //   const fileNames = connectedDocuments.map(doc => doc?.data?.label);
+  //   return fileNames;
+  // };
+  
+  
   return (
     <div className="w-full h-screen bg-gray-50">
       <ReactFlow
