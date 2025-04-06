@@ -22,6 +22,8 @@ export default function Login() {
         try {
             const response = await axios.post("/api/login", formData);
             alert(response.data.message);
+            const userEmail = response.data.email // fallback to form input if not in response
+            localStorage.setItem("email", userEmail);
             navigate("/chat"); // Change to your desired route
         } catch (error) {
             alert(error.response?.data?.error || "Login failed");
