@@ -11,8 +11,9 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import Policy from './pages/Policy';
 import ImageDocumentUI from './pages/Image';
 import StructuredDataDocumentUI from './pages/Structure';
-import PDFDocument from './pages/PDFs';import ChatContentKush from './components/ChatContentKush';
+import PDFDocument from './pages/PDFs'; import ChatContentKush from './components/ChatContentKush';
 import ConnectedDocsChat from './components/DocumentNode';
+import Landing from './pages/Landing';
 import KushAI from './components/kushAI';
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENTID;
@@ -25,7 +26,7 @@ function App() {
           {/* Auth Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-
+          <Route path="/landing" element={<Landing />} />
           {/* Admin Routes with Sidebar */}
           <Route path="/" element={<AdminLayout />}>
             <Route index element={<Home />} />
@@ -37,6 +38,7 @@ function App() {
             <Route path="pdfs" element={<PDFDocument />} />
             <Route path="chat-kush" element={<ChatContentKush />} />
             <Route path="kush-ai" element={<KushAI />} />
+
           </Route>
         </Routes>
       </BrowserRouter>

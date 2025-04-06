@@ -78,9 +78,9 @@ const ImageDocumentUI: React.FC = () => {
   const [documents, setDocuments] = useState<ImageDocument[]>([
     {
       id: '1',
-      name: 'Family Vacation Photos 2024',
+      name: 'Sales Images',
       size: '15.7 MB',
-      description: 'Summer beach vacation photos with family',
+      description: 'Chart Image of Annual Profit',
       dateAdded: '4/5/2025',
       status: 'complete',
       source: 'Drive'
