@@ -54,6 +54,10 @@ At its core, **design** is about *problem-solving*...
 
 Investing in **quality design** isn't just beneficial for users...
 `);
+  const [showConfidentialityModal, setShowConfidentialityModal] = useState(false);
+  const [selectedConfidentiality, setSelectedConfidentiality] = useState('Public');
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Function to handle canvas close and save data
   const handleCanvasClose = (title: string, content: string) => {
@@ -163,7 +167,6 @@ Investing in **quality design** isn't just beneficial for users...
 
           try {
             const dataObj = JSON.parse(dataStr);
-            console.log("data",dataObj.action)
             if (dataObj.payload_type === 'values' && dataObj.error) {
               // 🔴 Handle error
               const errorMessage = dataObj.error;
@@ -190,8 +193,8 @@ Investing in **quality design** isn't just beneficial for users...
               });
               setShowCanvas(true); // Ensures the canvas is visible
             }
-            
-            if (dataObj.payload_type === 'message' && called==false) {
+
+            if (dataObj.payload_type === 'message' && called == false) {
               const {
                 content,
                 function_call,
@@ -201,6 +204,7 @@ Investing in **quality design** isn't just beneficial for users...
               } = dataObj;
 
               if (function_call) {
+                console.log('function_call', function_name);
                 let spinnerText = '';
                 switch (function_name) {
                   case 'RouteQuery':
@@ -357,64 +361,81 @@ Investing in **quality design** isn't just beneficial for users...
     recognition.onend = () => setListening(false);
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
+    const fileArray = Array.from(files);
+    setPendingFiles(fileArray);
+    setShowConfidentialityModal(true);
+  };
 
+  // Called after the user selects the confidentiality level.
+  const submitFilesWithConfidentiality = async (confidentiality: string) => {
+    // Create form data including the confidentiality level
+    setShowConfidentialityModal(false);
+    setIsUploading(true);
     const formData = new FormData();
-    Array.from(files).forEach((file) => formData.append('files', file));
+    pendingFiles.forEach((file) => {
+      formData.append('files', file);
+    });
+    formData.append('confidentiality', confidentiality);
 
     try {
       const res = await axios.post('/api/upload-docs', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-
-      const uploaded = Array.from(files).map((f) => ({ id: f.name, name: f.name }));
-      setUploadedFiles(prev => [...prev, ...uploaded]);
-
-      setUploadNotification(`${files.length} file(s) uploaded successfully.`);
-      setTimeout(() => setUploadNotification(null), 3000);
+      // If the upload is successful, update the uploadedFiles state
+      const uploaded = pendingFiles.map((file) => ({
+        id: file.name,
+        name: file.name,
+        confidentiality,
+      }));
+      setUploadedFiles((prev) => [...prev, ...uploaded]);
+      setUploadNotification(`${pendingFiles.length} file(s) uploaded successfully.`);
+      // Clear the pending files state
+      setPendingFiles([]);
     } catch {
       setUploadNotification('Upload failed.');
-      setTimeout(() => setUploadNotification(null), 3000);
     }
+    setIsUploading(false);
+    setTimeout(() => setUploadNotification(null), 3000);
   };
 
   return (
     <div className="flex h-screen bg-white">
       <main className="flex-1 flex flex-col h-screen relative bg-gray-50">
 
-      {showGDrivePicker && (
-        <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm z-30 flex items-center justify-center">
-          <div className="bg-white rounded-xl p-6 shadow-lg max-w-md w-full">
-            <GDrivePicker
-              onFilesSelected={async (files) => {
-                try {
-                  const res = await axios.post('/api/upload-docs', { files });
-                  if (res.status === 200) {
-                    setUploadedFiles(prev => [...prev, ...files]);
-                    setMessages(prev => [
-                      ...prev,
-                      { sender: 'bot', text: `Data uploaded successfully from Google Drive.` }
-                    ]);
-                  } else {
+        {showGDrivePicker && (
+          <div className="absolute inset-0 bg-black bg-opacity-30 backdrop-blur-sm z-30 flex items-center justify-center">
+            <div className="bg-white rounded-xl p-6 shadow-lg max-w-md w-full">
+              <GDrivePicker
+                onFilesSelected={async (files) => {
+                  try {
+                    const res = await axios.post('/api/upload-docs', { files });
+                    if (res.status === 200) {
+                      setUploadedFiles(prev => [...prev, ...files]);
+                      setMessages(prev => [
+                        ...prev,
+                        { sender: 'bot', text: `Data uploaded successfully from Google Drive.` }
+                      ]);
+                    } else {
+                      setMessages(prev => [
+                        ...prev,
+                        { sender: 'bot', text: `Failed to upload data from Google Drive.` }
+                      ]);
+                    }
+                  } catch {
                     setMessages(prev => [
                       ...prev,
                       { sender: 'bot', text: `Failed to upload data from Google Drive.` }
                     ]);
                   }
-                } catch {
-                  setMessages(prev => [
-                    ...prev,
-                    { sender: 'bot', text: `Failed to upload data from Google Drive.` }
-                  ]);
-                }
-                setShowGDrivePicker(false);
-              }}
-            />
+                  setShowGDrivePicker(false);
+                }}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
 
         {showNotionPicker && (
@@ -468,6 +489,40 @@ Investing in **quality design** isn't just beneficial for users...
         {uploadNotification && (
           <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-100 text-green-800 px-4 py-2 rounded-md shadow-md z-10">
             {uploadNotification}
+          </div>
+        )}
+
+        {showConfidentialityModal && (
+          <div className="absolute inset-0 bg-transparent flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded shadow-md max-w-sm w-full">
+              <h3 className="text-lg font-bold mb-4">Select Document Confidentiality</h3>
+              <div className="flex flex-col space-y-2">
+                <button
+                  onClick={() => submitFilesWithConfidentiality('Public')}
+                  className="bg-blue-100 p-2 rounded text-center cursor-pointer"
+                >
+                  Public
+                </button>
+                <button
+                  onClick={() => submitFilesWithConfidentiality('Restricted')}
+                  className="bg-yellow-100 p-2 rounded text-center cursor-pointer"
+                >
+                  Restricted
+                </button>
+                <button
+                  onClick={() => submitFilesWithConfidentiality('Confidential')}
+                  className="bg-red-100 p-2 rounded text-center cursor-pointer"
+                >
+                  Confidential
+                </button>
+              </div>
+              {isUploading && (
+                <div className="mt-4 flex items-center gap-2">
+                  <span className="animate-spin h-5 w-5 border-2 border-blue-400 border-t-transparent rounded-full" />
+                  <span>Uploading...</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
