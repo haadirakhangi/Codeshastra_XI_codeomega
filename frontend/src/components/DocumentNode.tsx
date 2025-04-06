@@ -14,7 +14,7 @@ type DocumentNodeProps = {
 
 export function DocumentNode({ data }: DocumentNodeProps) {
   return (
-    <div className="relative bg-amber-200 shadow-md rounded-lg p-4 border border-gray-200 min-w-[180px] max-w-[280px]">
+    <div className="relative bg-amber-200 shadow-md rounded-lg p-4 border border-gray-200 min-w-[180px] max-w-[1000px]">
       <Handle
         type="source"
         position={Position.Right}
