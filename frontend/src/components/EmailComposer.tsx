@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Send, X } from 'lucide-react';
+import axios from 'axios';
 
 interface EmailComposerProps {
   initialTo?: string;
@@ -16,9 +17,18 @@ const EmailComposer: React.FC<EmailComposerProps> = ({
   const [subject, setSubject] = useState(initialSubject);
   const [message, setMessage] = useState(initialMessage);
 
-  const handleSendEmail = () => {
-    console.log('Sending email with:', { to, subject, message });
-    // axios.post('/api/email', { to, subject, message });
+  const handleSendEmail = async () => {
+    try {
+      const payload = { to, subject, message };
+      console.log('Sending email with:', payload);
+  
+      await axios.post('/api/send-email', payload); // adjust the endpoint if different
+  
+      alert('Email sent successfully!');
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      alert('Failed to send email.');
+    }
   };
 
   return (

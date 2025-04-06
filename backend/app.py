@@ -39,7 +39,8 @@ from bson import ObjectId
 from werkzeug.utils import secure_filename
 import base64
 from datetime import datetime
-
+import smtplib
+from email.mime.text import MIMEText
 from models.data_models import *
 
 load_dotenv()
@@ -965,6 +966,44 @@ def connected_files():
     except Exception as e:
         print(f"Error generating content: {e}")
         return jsonify({"error": "Gemini failed to respond."}), 500
+    
+from email.message import EmailMessage
+import smtplib, ssl
+
+def send_mail(recipient_email, subject, message):
+    sender_email = "codeomega11@gmail.com"
+    sender_password = "gqnknjdlvmtedqzt"
+
+    email = EmailMessage()
+    email['From'] = sender_email
+    email['To'] = recipient_email
+    email['Subject'] = subject
+    email.set_content(message)
+
+    context = ssl.create_default_context()
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+        server.login(sender_email, sender_password)
+        server.send_message(email)
+        print("Mail Sent")
+
+
+@app.route('/send-email', methods=['POST'])
+def send_email_api():
+    data = request.json
+    to = data.get('to')
+    subject = data.get('subject')
+    message = data.get('message')
+
+    if not all([to, subject, message]):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        send_mail(to, subject, message)
+        return jsonify({'message': 'Email sent successfully'}), 200
+    except Exception as e:
+        print(e)
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
