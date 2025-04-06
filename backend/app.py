@@ -519,7 +519,7 @@ def login():
 
     if user_data and bcrypt.check_password_hash(user_data["password"], password):
         session["user_id"] = str(user_data["_id"])  # Store user ID in session
-        return jsonify({"message": "Login successful"}), 200
+        return jsonify({"message": "Login successful","email":email}), 200
     else:
         return jsonify({"error": "Invalid email or password"}), 401
     
