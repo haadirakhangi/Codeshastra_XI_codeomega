@@ -11,11 +11,16 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import Policy from './pages/Policy';
 import ImageDocumentUI from './pages/Image';
 import StructuredDataDocumentUI from './pages/Structure';
+<<<<<<< HEAD
 import PDFDocument from './pages/PDFs';
 import ChatContentKush from './components/ChatContentKush';
 import GDrivePicker from './components/GDrivePicker';
+=======
+import PDFDocument from './pages/PDFs'; import ChatContentKush from './components/ChatContentKush';
+>>>>>>> b04a687ca580cf5560066ae773ea33f458f8b72d
 import ConnectedDocsChat from './components/DocumentNode';
-import KushAI from './components/kushAI';
+import Landing from './pages/Landing';
+import InteractiveAI from './components/InteractiveAI';
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENTID;
 
@@ -27,7 +32,7 @@ function App() {
           {/* Auth Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-
+          <Route path="/landing" element={<Landing />} />
           {/* Admin Routes with Sidebar */}
           <Route path="/" element={<AdminLayout />}>
             <Route index element={<Home />} />
@@ -38,7 +43,8 @@ function App() {
             <Route path="structured" element={<StructuredDataDocumentUI />} />
             <Route path="pdfs" element={<PDFDocument />} />
             <Route path="chat-kush" element={<ChatContentKush />} />
-            <Route path="kush-ai" element={<KushAI />} />
+            <Route path="interactive-ai" element={<InteractiveAI />} />
+
           </Route>
         </Routes>
       </BrowserRouter>

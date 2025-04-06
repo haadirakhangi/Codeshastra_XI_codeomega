@@ -793,21 +793,42 @@ def upload_new_files():
     user_id = session.get('user_id')
     if not user_id:
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+
     if 'documents' not in request.files:
         return jsonify({'error': 'No files part in the request'}), 400
+
     files = request.files.getlist('documents')
     saved_files = []
+
     for file in files:
         if file.filename == '':
             continue
+
         filename = secure_filename(file.filename)
-        folder_type = 'text' if filename.endswith('.pdf') else 'image'
-        user_folder = os.path.join(UPLOAD_FOLDER, str(user_id), folder_type)
+
+        # You can determine type by MIME type or just fallback to 'others'
+        # content_type = file.mimetype or ''
+        # if content_type.startswith('text/'):
+        #     folder_type = 'text'
+        # elif content_type.startswith('image/'):
+        #     folder_type = 'image'
+        # elif content_type.startswith('application/pdf'):
+        #     folder_type = 'pdf'
+        # else:
+        folder_type = 'docs'
+
+        user_folder = os.path.join("public2", str(user_id), folder_type)
         os.makedirs(user_folder, exist_ok=True)
 
         file_path = os.path.join(user_folder, filename)
         file.save(file_path)
-        saved_files.append(filename)
+
+        saved_files.append({
+            'filename': filename,
+            'path': file_path,
+            'type': folder_type
+        })
+
     return jsonify({
         'message': f'{len(saved_files)} file(s) uploaded successfully.',
         'files': saved_files
@@ -824,7 +845,25 @@ def serve_uploaded_file(user_id, filename):
     print(f"File path: {file_path}")
     return send_from_directory(file_path, filename, as_attachment=False)
    
-     
+@app.route('/connected-files', methods=['POST'])
+def connected_files():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+
+# Get the list of connected files from the request
+    data = request.get_json()
+    connected_files = data.get('connected_files', [])
+    question = data.get('question', '')
+    print(f"Question: {question}")
+    # Save the connected files to the database or perform any other operation
+    # For now, just return them back
+    print(f"Connected files: {connected_files}")
+
+    return jsonify({
+    'message': 'Connected files received successfully!',
+    'connected_files': connected_files
+    }), 200
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

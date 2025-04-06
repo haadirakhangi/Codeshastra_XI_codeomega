@@ -1,7 +1,7 @@
 import React from 'react';
-import { DocumentCanvas } from '../components/DocumentCanvas';
+import { DocumentCanvas } from './DocumentCanvas';
 
-const KushAI = () => {
+const InteractiveAI = () => {
   return (
     <div className="w-full h-screen">
       <DocumentCanvas />
@@ -9,4 +9,4 @@ const KushAI = () => {
   );
 };
 
-export default KushAI;
+export default InteractiveAI;
