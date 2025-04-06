@@ -41,6 +41,7 @@ import base64
 from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
+from langmem import create_prompt_optimizer
 from models.data_models import *
 
 load_dotenv()
@@ -55,6 +56,7 @@ uri = (
 client = MongoClient(uri, server_api=ServerApi("1"))
 mongodb = client["CodeShastra"]
 user_collection = mongodb["users"]
+policy_collection = mongodb["policy"]
 
 bcrypt = Bcrypt(app)
 
@@ -62,8 +64,6 @@ FAISS_INDEX_PATH = os.path.join("faiss_index", "index.faiss")
 LLM = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 EMBEDDINGS = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
 
-
-# ROUTER
 structured_llm_router = LLM.with_structured_output(AnalyzeQuery)
 router_system_prompt = """You are an expert in analyzing user queries to determine the correct routing destination and whether access should be granted to documents from different departments.
 
@@ -708,16 +708,12 @@ def upload_docs():
     # print("Response from Gemini:", response)
 
     for pdf in pdfs:
-        system_prompt= """You have to determine who has access to this document based on the following instruction. The types of users are: intern, manager and admin. 
-        - Legal documents should not be made available to interns
-        - Financial documents should not be made available to manager and intern 
-        - Admin has access to all the documents
 
-        Respond with a list of user types who are allowed to access the document.""" 
         context,docs = DataLoader.load_pdf(pdf)
+        policy = policy_collection.find_one({'_id': ObjectId('67f200964f60da27ad6d9f3b')})
         policy_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", system_prompt),
+                ("system", policy),
                 ("human", "{context}"),
             ]
         )
@@ -1004,6 +1000,69 @@ def send_email_api():
     except Exception as e:
         print(e)
         return jsonify({'error': str(e)}), 500
+    
+
+
+@app.route('/get-policy', methods=['GET'])
+def get_policy():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+
+    try:
+        policy = policy_collection.find_one({'_id': ObjectId('67f200964f60da27ad6d9f3b')})
+        if not policy:
+            return jsonify({'error': 'Policy not found'}), 404
+        
+        return jsonify({
+            'policy': policy.get('policy', '')  # Assuming the text is stored under 'content'
+        }), 200
+
+    except Exception as e:
+        print("Error fetching policy:", e)
+        return jsonify({'error': 'Invalid ID or internal error'}), 500
+
+@app.route('/optimize-policy', methods=['POST'])
+def optimize_policy():
+    data = request.json
+
+    policy_id = "67f200964f60da27ad6d9f3b"
+    feedback = data.get("feedback")
+
+    if not policy_id or not feedback:
+        return jsonify({"error": "Missing policy ID or feedback"}), 400
+
+    try:
+        # Fetch existing policy from DB
+        policy_doc = policy_collection.find_one({"_id": ObjectId(policy_id)})
+        if not policy_doc:
+            return jsonify({"error": "Policy not found"}), 404
+
+        original_policy = policy_doc.get("policy", "")
+        
+        # Optimizing policy
+        optimizer = create_prompt_optimizer(LLM)
+        conversation = [
+            {"role": "user", "content": "Write a policy for data access"},
+            {"role": "assistant", "content": original_policy},
+        ]
+        trajectories = [(conversation, feedback)]
+        improved_policy = optimizer.ainvoke({
+            "trajectories": trajectories,
+            "prompt": "You are a policy expert tasked with improving this document based on user feedback."
+        })
+
+        # Update in MongoDB
+        policy_collection.update_one(
+            {"_id": ObjectId(policy_id)},
+            {"$set": {"policy": improved_policy}}
+        )
+
+        return jsonify({"message": "Policy optimized and updated", "optimizedPolicy": improved_policy}), 200
+
+    except Exception as e:
+        print("Optimization error:", e)
+        return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

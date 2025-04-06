@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
+import axios from 'axios';
 
 interface AccessDeniedCardProps {
   resource: string;
@@ -12,6 +13,23 @@ const AccessDeniedCard: React.FC<AccessDeniedCardProps> = ({
   reason,
   timestamp
 }) => {
+  const [requested, setRequested] = useState(false);
+
+  const handleSubmit = () => {
+    const email = localStorage.getItem('email');
+
+    console.log('Requesting access...');
+
+    axios.post('http://localhost:4000/request-access', { email })
+      .then(response => {
+        console.log('Access request sent:', response.data);
+        setRequested(true);
+      })
+      .catch(error => {
+        console.error('Error requesting access:', error);
+      });
+  };
+
   return (
     <div className="flex justify-start">
       <div className="flex flex-col items-start">
@@ -24,10 +42,15 @@ const AccessDeniedCard: React.FC<AccessDeniedCardProps> = ({
             <h4 className="font-medium text-gray-800 mb-1">{resource}</h4>
             <p className="text-gray-600 text-sm mb-3">{reason}</p>
             <button
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              onClick={() => console.log(`Requesting access to: ${resource}`)}
+              disabled={requested}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                requested
+                  ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+              onClick={handleSubmit}
             >
-              Request Access
+              {requested ? 'Access Requested' : 'Request Access'}
             </button>
           </div>
         </div>

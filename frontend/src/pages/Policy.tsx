@@ -12,7 +12,7 @@ const Policy = () => {
   useEffect(() => {
     const fetchPolicy = async () => {
       try {
-        const res = await axios.get('/api/policy');
+        const res = await axios.get('/api/get-policy');
         setPolicyText(res.data.policy);
       } catch (error) {
         console.error('Error fetching policy:', error);
@@ -24,16 +24,28 @@ const Policy = () => {
     fetchPolicy();
   }, []);
 
-  const handleSubmitFeedback = (e) => {
+  const handleSubmitFeedback = async (e) => {
     e.preventDefault();
-    // In production, you would send this feedback to your backend
-    console.log("Feedback submitted:", feedback);
-    setShowThankYou(true);
-    
-    setTimeout(() => {
-      setShowThankYou(false);
-      setFeedback('');
-    }, 3000);
+  
+    if (!feedback.trim()) return;
+  
+    try {
+      const res = await axios.post('/api/optimize-policy', {
+        feedback,
+      });
+  
+      const optimized = res.data.optimizedPolicy;
+      setPolicyText(optimized);
+      setShowThankYou(true);
+    } catch (err) {
+      console.error("Failed to optimize policy:", err);
+      alert("Error submitting feedback. Please try again.");
+    } finally {
+      setTimeout(() => {
+        setShowThankYou(false);
+        setFeedback('');
+      }, 3000);
+    }
   };
 
   // Animation variants
