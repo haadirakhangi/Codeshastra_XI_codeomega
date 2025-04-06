@@ -912,9 +912,15 @@ def connected_files():
 
     # Ask question using Gemini
     try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+        user_data: dict = user_collection.find_one({"_id": ObjectId(user_id)})
+        role = user_data["role"]
+        dept = user_data["department"]
         response = client.models.generate_content(
             model="gemini-1.5-flash",
-            contents=[*uploaded_docs, question]
+            contents=[*uploaded_docs, "My role is" + role + "and i belong to " + dept + "department and here is my question. Answer my question " + question]
         )
 
 
