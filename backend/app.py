@@ -919,7 +919,7 @@ def connected_files():
         dept = user_data["department"]
         response = client.models.generate_content(
             model="gemini-1.5-flash",
-            contents=[*uploaded_docs, "My role is" + role + "and i belong to " + dept + "department and here is my question. Answer my question " + question]
+            contents=[*uploaded_docs, "My role is" + role + "and i belong to " + dept + "department and here is my question. Answer my question according to the way it us useful to me as per my role and department. : " + question]
         )
 
 
