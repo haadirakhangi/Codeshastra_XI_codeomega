@@ -201,6 +201,7 @@ def generate(state):
     question = state["question"]
     documents = state["documents"]
     prompt_type = state["question_type"]
+
     generate_report_prompt = """
 You are a senior data analyst. Your job is to generate a clear, well-structured analytical report based on the information provided.
 
@@ -254,7 +255,7 @@ The report should be written in **Markdown format** and cover all relevant aspec
 
     # RAG generation
     generation = rag_chain.invoke({"context": documents, "question": question})
-    return {"documents": documents, "question": question, "generation": generation}
+    return {"documents": documents, "question": question, "generation": generation, "action": prompt_type}
 
 def grade_documents(state):
     """
@@ -284,7 +285,7 @@ def grade_documents(state):
         else:
             print("---GRADE: DOCUMENT NOT RELEVANT---")
             continue
-    return {"filtered_documents": filtered_docs, "question": question}
+    return {"filtered_documents": filtered_docs, "question": question, "action": state["question_type"]}
 
 
 def transform_query(state):
@@ -397,7 +398,6 @@ def raise_error(state):
     """
     documents = state["documents"]
     document_department = documents[0].metadata["dept"]
-    print(f"Document department: {documents[:5]}")
     return {"error": f"User is not authorized to access documents. Please contact your manager for access."}
 
 class GraphState(TypedDict):
@@ -415,6 +415,7 @@ class GraphState(TypedDict):
         instructions: instructions or policy
         error: error message
         filtered_documents: filtered documents based on relevance
+        action: action to take (e.g., generating_report, raise error)
     """
 
     question: str
@@ -427,6 +428,7 @@ class GraphState(TypedDict):
     instructions: str
     error: str
     filtered_documents: List[Document]
+    action: str
 
 
 workflow = StateGraph(GraphState)
@@ -576,16 +578,16 @@ def agent_chat():
                 yield f"data: {json.dumps(data)}\n\n".encode("utf-8")
             elif s[0] == "values":
                 values_data = s[1]
-                if "error" in values_data:
-                    error_message = values_data["error"]
-                    data = {
-                        "payload_type": "values",
-                        "error": error_message,
-                    }
-                else:
-                    data = {
-                        "payload_type": "values",
-                    }
+                print("VALUES DATA", values_data)
+                data = {}
+                data["payload_type"] = "values"
+                if "error" or "action" in values_data:
+                    if "action" in values_data:
+                        action = values_data["action"]
+                        data["action"] = action
+                    elif "error" in values_data:
+                        error_message = values_data["error"]
+                        data["error"] = error_message
                 yield f"data: {json.dumps(data)}\n\n".encode("utf-8")
     return Response(
         stream_with_context(generate()),
@@ -769,21 +771,42 @@ def upload_new_files():
     user_id = session.get('user_id')
     if not user_id:
         return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+
     if 'documents' not in request.files:
         return jsonify({'error': 'No files part in the request'}), 400
+
     files = request.files.getlist('documents')
     saved_files = []
+
     for file in files:
         if file.filename == '':
             continue
+
         filename = secure_filename(file.filename)
-        folder_type = 'text' if filename.endswith('.pdf') else 'image'
-        user_folder = os.path.join(UPLOAD_FOLDER, str(user_id), folder_type)
+
+        # You can determine type by MIME type or just fallback to 'others'
+        # content_type = file.mimetype or ''
+        # if content_type.startswith('text/'):
+        #     folder_type = 'text'
+        # elif content_type.startswith('image/'):
+        #     folder_type = 'image'
+        # elif content_type.startswith('application/pdf'):
+        #     folder_type = 'pdf'
+        # else:
+        folder_type = 'docs'
+
+        user_folder = os.path.join("public2", str(user_id), folder_type)
         os.makedirs(user_folder, exist_ok=True)
 
         file_path = os.path.join(user_folder, filename)
         file.save(file_path)
-        saved_files.append(filename)
+
+        saved_files.append({
+            'filename': filename,
+            'path': file_path,
+            'type': folder_type
+        })
+
     return jsonify({
         'message': f'{len(saved_files)} file(s) uploaded successfully.',
         'files': saved_files
@@ -800,7 +823,25 @@ def serve_uploaded_file(user_id, filename):
     print(f"File path: {file_path}")
     return send_from_directory(file_path, filename, as_attachment=False)
    
-     
+@app.route('/connected-files', methods=['POST'])
+def connected_files():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized. No user in session.'}), 401
+
+# Get the list of connected files from the request
+    data = request.get_json()
+    connected_files = data.get('connected_files', [])
+    question = data.get('question', '')
+    print(f"Question: {question}")
+    # Save the connected files to the database or perform any other operation
+    # For now, just return them back
+    print(f"Connected files: {connected_files}")
+
+    return jsonify({
+    'message': 'Connected files received successfully!',
+    'connected_files': connected_files
+    }), 200
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
