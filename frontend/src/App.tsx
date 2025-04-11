@@ -13,7 +13,6 @@ import ImageDocumentUI from './pages/Image';
 import StructuredDataDocumentUI from './pages/Structure';
 import PDFDocument from './pages/PDFs';
 import ChatContentKush from './components/ChatContentKush';
-import ConnectedDocsChat from './components/DocumentNode';
 import Landing from './pages/Landing';
 import InteractiveAI from './components/InteractiveAI';
 

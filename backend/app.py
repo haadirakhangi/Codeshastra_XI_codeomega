@@ -13,6 +13,7 @@ from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from core.ingest import DataLoader
+from google.genai import types
 from core.utils import Utilities
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
@@ -59,7 +60,7 @@ user_collection = mongodb["users"]
 policy_collection = mongodb["policy"]
 
 bcrypt = Bcrypt(app)
-
+GEMININ_CLIENT = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 FAISS_INDEX_PATH = os.path.join("faiss_index", "index.faiss")
 LLM = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 EMBEDDINGS = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
@@ -104,8 +105,7 @@ question_router = route_prompt | structured_llm_router
 structured_llm_grader = LLM.with_structured_output(GradeDocuments)
 
 grade_system_prompt = """You are a grader assessing relevance of a retrieved document to a user question. \n 
-    If the document contains some parts that answers the user's question or keyword(s) or semantic meaning related to the user question, grade it as relevant. If even a certain part from the document contains some information about the user question, output as 'yes'\n
-    It does not need to be a stringent test. The goal is to filter out erroneous retrievals. When the user is asking for a request like email, your aim should be to output 'yes' if it has the slightest information on the actual topic.\n
+    If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant.\nIt does not need to be a stringent test. The goal is to filter out erroneous retrievals. When the user is asking for a request like creating an email, then your aim should be to output 'yes' if it has the slightest information on the actual topic, in rest cases, be strict and ensure the context is relevant to the question.\n
     Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question."""
 grade_prompt = ChatPromptTemplate.from_messages(
     [
@@ -432,8 +432,6 @@ def raise_error(state):
     Returns:
         str: Error message
     """
-    documents = state["documents"]
-    document_department = documents[0].metadata["dept"]
     return {"error": f"User is not authorized to access documents. Please contact your manager for access."}
 
 class GraphState(TypedDict):
@@ -708,9 +706,17 @@ def upload_docs():
     # print("Response from Gemini:", response)
 
     for pdf in pdfs:
+        system_prompt= """\n\nYou have to determine who has access to this document based on the following instruction. The types of users are: intern, manager and admin. 
+        - Legal documents should not be made available to interns
+        - Financial documents should not be made available to manager and intern 
+        - Admin has access to all the documents
 
+        Respond with a list of user types who are allowed to access the document. The response should strictly be a list of the user types.""" 
         context,docs = DataLoader.load_pdf(pdf)
-        policy = policy_collection.find_one({'_id': ObjectId('67f200964f60da27ad6d9f3b')})
+        policy_doc = policy_collection.find_one({'_id': ObjectId('67f200964f60da27ad6d9f3b')})
+        policy = policy_doc.get("policy", "")
+        policy += system_prompt
+        print("policy", policy)
         policy_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", policy),
@@ -1032,37 +1038,41 @@ def optimize_policy():
     if not policy_id or not feedback:
         return jsonify({"error": "Missing policy ID or feedback"}), 400
 
-    try:
+    # try:
         # Fetch existing policy from DB
-        policy_doc = policy_collection.find_one({"_id": ObjectId(policy_id)})
-        if not policy_doc:
-            return jsonify({"error": "Policy not found"}), 404
+    policy_doc = policy_collection.find_one({"_id": ObjectId(policy_id)})
+    if not policy_doc:
+        return jsonify({"error": "Policy not found"}), 404
 
-        original_policy = policy_doc.get("policy", "")
-        
-        # Optimizing policy
-        optimizer = create_prompt_optimizer(LLM)
-        conversation = [
-            {"role": "user", "content": "Write a policy for data access"},
-            {"role": "assistant", "content": original_policy},
-        ]
-        trajectories = [(conversation, feedback)]
-        improved_policy = optimizer.ainvoke({
-            "trajectories": trajectories,
-            "prompt": "You are a policy expert tasked with improving this document based on user feedback."
-        })
+    original_policy = policy_doc.get("policy", "")
+    prompt = """You are a Prompt Optimizer. Your role is to take an existing prompt and improve its clarity, effectiveness, and alignment with the user's intent. You will also incorporate any feedback provided by the user.
 
-        # Update in MongoDB
-        policy_collection.update_one(
-            {"_id": ObjectId(policy_id)},
-            {"$set": {"policy": improved_policy}}
-        )
+Follow these steps:
 
-        return jsonify({"message": "Policy optimized and updated", "optimizedPolicy": improved_policy}), 200
+Understand the Goal: Read the original prompt and the user's feedback carefully to determine the intended outcome.
 
-    except Exception as e:
-        print("Optimization error:", e)
-        return jsonify({"error": "Internal server error"}), 500
+Identify Issues: Look for any vagueness, redundancy, unnecessary complexity, or lack of focus in the original prompt.
+
+Optimize: Rewrite the prompt to be more clear, concise, and targeted, ensuring it aligns with the user's desired output.\n\nEXISTING PROMPT:```{prompt}```\n"""
+    improved_policy = client.models.generate_content(
+        model="gemini-2.0-flash",
+        config=types.GenerateContentConfig(
+            system_instruction=prompt.format(prompt=original_policy)),
+        contents=f"FEEDBACK:{feedback}"
+    )
+
+
+    # Update in MongoDB
+    policy_collection.update_one(
+        {"_id": ObjectId(policy_id)},
+        {"$set": {"policy": improved_policy.text}}
+    )
+
+    return jsonify({"message": "Policy optimized and updated", "optimizedPolicy": improved_policy.text}), 200
+
+    # except Exception as e:
+    #     print("Optimization error:", e)
+    #     return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)

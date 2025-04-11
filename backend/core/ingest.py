@@ -18,7 +18,7 @@ class DataLoader:
             chunk_size=500, chunk_overlap=100, length_function=len
         )
         doc_splits = text_splitter.split_documents(docs)
-        num_indexes = 10
+        num_indexes = int(len(doc_splits)/3)
         random_indexes = random.sample(range(len(doc_splits)), num_indexes)
         random_docs= [doc_splits[i] for i in random_indexes]
         context = "\n\n".join(doc.page_content for doc in random_docs)
